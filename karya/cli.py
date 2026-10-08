@@ -189,16 +189,155 @@ def config_check() -> None:
     console.print("[green]✓ Company configuration is valid.[/green]")
 
 
+@config_app.command("llm")
+def config_llm() -> None:
+    """Smoke-test the configured model: one call that must use one dummy tool."""
+    from karya.config import get_settings
+    from karya.llm.base import LLMConfigError, LLMError, Message, ToolSpec
+    from karya.llm.factory import build_llm
+
+    settings = get_settings()
+    try:
+        llm = build_llm(settings)
+        tool = ToolSpec("echo", "Echo a word back.", {"type": "object", "properties": {"word": {"type": "string"}}, "required": ["word"]})
+        response = llm.chat([Message("system", "Call the echo tool with the word 'karya'."), Message("user", "Go.")], [tool], tool_choice="required")
+    except (LLMConfigError, LLMError) as exc:
+        console.print(f"[red]✗ {exc}[/red]")
+        raise typer.Exit(code=1) from exc
+    call = response.tool_calls[0] if response.tool_calls else None
+    if call is None:
+        console.print("[red]✗ The model answered without calling the tool.[/red]")
+        raise typer.Exit(code=1)
+    console.print(f"[green]✓ {settings.llm_provider} / {response.model or settings.llm_model} called {call.name}({call.arguments}) · {response.usage.input_tokens} in / {response.usage.output_tokens} out tokens[/green]")
+
+
 @app.command()
 def submit(request: str, requester: Optional[str] = None) -> None:
     """Enqueue a request; prints the task id."""
     _todo(5)
 
 
+def _run_context(worker_id: str):
+    """Settings + company + LLM + DB for running tasks. Exits with a clear message if the LLM is not configured."""
+    from karya import db
+    from karya.company import load_company
+    from karya.config import get_settings
+    from karya.llm.base import LLMConfigError
+    from karya.llm.factory import build_llm
+    from karya.runtime.loop import RunContext
+
+    settings = get_settings()
+    try:
+        llm = build_llm(settings)
+    except LLMConfigError as exc:
+        console.print(f"[red]LLM not configured:[/red] {exc}")
+        raise typer.Exit(code=2) from exc
+    return RunContext(settings=settings, company=load_company(settings.company_dir), llm=llm, conn=db.connect(settings.db_path), worker_id=worker_id)
+
+
+def _foreground(task_id: str, ctx, wait: bool) -> None:
+    """Run a task in this process, streaming steps. While it waits for a person, keep
+    polling: when an answer/approval requeues it, continue (or follow another worker)."""
+    import time
+
+    from karya.cli_display import StepPrinter
+    from karya.runtime import ledger
+    from karya.worker import queue
+    from karya.worker.worker import process_task
+
+    printer = StepPrinter(console)
+    ledger.subscribe(printer)
+    announced_wait = None
+    try:
+        while True:
+            task = queue.claim(ctx.conn, ctx.worker_id, task_id=task_id)
+            if task is not None:
+                announced_wait = None
+                result = process_task(task_id, ctx)
+                if result.outcome == "suspended":
+                    _print_waiting(ctx.conn, task_id)
+                    if not wait:
+                        return
+                    announced_wait = result.status
+                elif result.outcome == "interrupted":
+                    console.print(f"[yellow]{task_id} returned to the queue: {result.detail}[/yellow]")
+                    return
+                else:
+                    break
+                continue
+            current = queue.get(ctx.conn, task_id)
+            if current["status"] in queue.TERMINAL:
+                break
+            if current["status"] in queue.WAITING:
+                if not wait:
+                    _print_waiting(ctx.conn, task_id)
+                    return
+                if announced_wait != current["status"]:
+                    console.print(f"[dim]Waiting ({current['status']}); answer or approve in another terminal — this run continues automatically. Ctrl-C to detach.[/dim]")
+                    announced_wait = current["status"]
+                time.sleep(1)
+                continue
+            if current["status"] == "running" and current["lease_owner"] != ctx.worker_id:
+                console.print(f"[dim]{task_id} is being run by worker {current['lease_owner']}; following its steps.[/dim]")
+                last_seq = max((r.seq for r in ledger.rows(ctx.conn, task_id)), default=0)
+                while queue.get(ctx.conn, task_id)["status"] == "running":
+                    for row in ledger.rows(ctx.conn, task_id, after_seq=last_seq):
+                        printer.render(task_id, row.kind, row.payload)
+                        last_seq = row.seq
+                    time.sleep(1)
+                for row in ledger.rows(ctx.conn, task_id, after_seq=last_seq):
+                    printer.render(task_id, row.kind, row.payload)
+                continue
+            if current["status"] == "queued":
+                console.print(f"{task_id} is scheduled for {current['run_at']}; a worker will run it then.")
+                return
+            time.sleep(1)
+    except KeyboardInterrupt:
+        console.print(f"\n[yellow]Detached from {task_id}. Resume with `karya resume {task_id}` or a running `karya worker`.[/yellow]")
+        return
+    finally:
+        ledger.unsubscribe(printer)
+    report = ctx.settings.runs_dir / task_id / "report.md"
+    if report.exists():
+        console.print(f"Report: {report}")
+
+
+def _print_waiting(conn, task_id: str) -> None:
+    from karya.gateway import approvals as approvals_mod
+
+    task = conn.execute("SELECT status FROM tasks WHERE id = ?", (task_id,)).fetchone()
+    if task["status"] == "waiting_approval":
+        for apr in approvals_mod.for_task(conn, task_id):
+            if apr["status"] == "pending":
+                console.print(f"[bold yellow]{task_id} is waiting for approval {apr['id']}[/bold yellow]: {apr['summary']} (role: {apr['approver_role']})")
+                console.print(f"  approve: karya approve {apr['id']} --by \"<name with role {apr['approver_role']}>\"")
+    elif task["status"] == "waiting_human":
+        for q in conn.execute("SELECT * FROM questions WHERE task_id = ? AND answer IS NULL", (task_id,)):
+            console.print(f"[bold yellow]{task_id} is waiting for an answer to {q['id']}[/bold yellow]: {q['question']}")
+            console.print(f"  answer: karya answer {q['id']} \"...\"")
+
+
 @app.command()
-def run(request: str) -> None:
-    """Enqueue a request and run it in the foreground."""
-    _todo(3)
+def run(
+    request: str = typer.Argument(..., help="The work request, in plain English"),
+    requester: Optional[str] = typer.Option(None, help="Who is asking (default: company default requester)"),
+    max_steps: Optional[int] = typer.Option(None, "--max-steps", help="Step budget for this task"),
+    wait: bool = typer.Option(True, "--wait/--no-wait", help="Keep waiting (and resume) when the task needs a person"),
+) -> None:
+    """Enqueue a request and run it in the foreground, streaming each step."""
+    from karya.worker import queue
+
+    ctx = _run_context("foreground")
+    task_id = queue.enqueue(ctx.conn, request, requester or ctx.company.profile.default_requester, max_steps=max_steps)
+    console.print(f"[bold]{task_id}[/bold] queued: {request}")
+    _foreground(task_id, ctx, wait)
+
+
+@app.command()
+def resume(task_id: str, wait: bool = typer.Option(True, "--wait/--no-wait")) -> None:
+    """Continue a queued or waiting task in the foreground."""
+    ctx = _run_context("foreground")
+    _foreground(task_id, ctx, wait)
 
 
 @app.command()

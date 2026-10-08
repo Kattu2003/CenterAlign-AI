@@ -103,3 +103,56 @@ Decisions not in the plan:
 - Connector specs are strict (`extra="forbid"`), so a typo in YAML fails loudly instead of being ignored.
 - Extra declared fields on `update_vendor_bank` / `create_vendor` so denied attempts are audited with
   their payload.
+
+## Phase 3 — Core runtime
+
+Done:
+- De-risk: `route.fetch(max_redirects=0)` + `route.fulfill(response=resp)` makes Chromium follow the 303
+  after a form POST (verified before building the gateway on it). `page.goto` on an attachment raises
+  "Download is starting"; the browser tool handles that as a download.
+- `karya/llm/`: protocol + OpenAI/Azure + Anthropic clients (explicit retries, one tool per step),
+  `structured()` forced-function outputs with one validation retry, `ScriptedLLM` (+ `find_ref`).
+- `karya/tools/`: browser (Playwright, snapshot.js refs, downloads, GET retries, logged-out hints, stale
+  refs, password refusal, login by tool), api_get, files_* (virtual roots, sandboxed, extraction →
+  code normalization → schema checks), memory_search/record_fact, ask_human, update_plan, finish,
+  submit_verdicts; explicit registry.
+- `karya/gateway/`: full §11.7 pipeline (`decide()` is unit-testable), intents state machine +
+  reconciliation, payload-bound single-use approvals with RBAC, secrets resolution + redaction.
+- `karya/runtime/`: models, ledger (append-only, `trace.jsonl` mirror, state rebuild), intake, context
+  builder, loop, stuck detection; Phase 3 placeholder verifier/report (replaced in phase 4).
+- `karya/worker/queue.py` (leases) and `process_task` with a heartbeat; `karya run` (live stream,
+  waits and resumes when a person answers/approves), `karya resume`, `karya config llm`.
+- Tests (105 + 1 skipped): gateway decision pipeline (17), intents, parsing, file sandbox, ledger
+  rebuild, memory retrieval, injection heuristics, redaction, and two real-browser scripted runs:
+  the full happy path and the Vertex approval hold.
+
+Acceptance:
+- Unit tests for gateway, policy, intents, parsing, files: pass.
+- Happy path: verified end to end with `ScriptedLLM` through real Chromium, the gateway and the sandbox
+  apps (one ERP record V001/AI/2026/0917 = 42380.00, D-3, D+27, entered by karya.agent; M2 labelled
+  Processed; Goal Spec, plan and a `why` on every step in the ledger; screenshots; trace.jsonl).
+  **Not run with a real LLM** (no API key in the build environment) — run
+  `karya run "Find the latest invoice from Acme Industries in the AP mailbox, enter it into the ERP, and tell me when it's done."`
+  once `.env` has a key (`karya config llm` checks the key first).
+- Vertex: the 202 "Held for approval" page and a pending APR row (role finance_manager, rule AP-001),
+  task `waiting_approval`, lease released, nothing posted — verified by a scripted browser test.
+
+Decisions not in the plan (see DECISIONS.md for the major ones):
+- Stateless steps: every step is `system + one user message` rebuilt from the ledger (no provider tool
+  transcripts). Same code path for live runs and resumes; trivially portable across providers.
+- The gateway runs the duplicate check BEFORE the approval hold, so nobody is asked to approve a
+  duplicate; for writes with a reconcile spec the system of record (not the status code) decides
+  `committed`, and the same lookup returns the record reference (ERP-INV-000104).
+- A 3xx to the connector's `logged_out_signal` path on a write is `failed` ("session expired, nothing
+  submitted"), not `committed`. If the pre-write existence check itself fails, the write is not sent
+  (503, fail closed). Identical writes already in flight are refused (double-submit guard).
+- `Observation.meta` (extra field): trusted notes/hints, retries, relogin markers, kept out of the
+  `<untrusted>` content.
+- `files_extract` auto-records `extracted:<path>` as a task fact so the verifier/report can compare the
+  ERP record with the document.
+- `why` longer than 200 chars is truncated, not rejected (a rejected step wastes a model call).
+- Blocked sub-resource requests are aborted and audited without an observation event (no noise).
+- `browser_fill`/`browser_select` return a refreshed snapshot (no screenshot) so the latest snapshot
+  always shows the current field values; refs stay stable because the DOM did not change.
+- Anthropic: the system prompt (instructions + company context) is marked for prompt caching.
+- `karya/cli_display.py` (not in the plan's layout) holds the rich rendering for the CLI.

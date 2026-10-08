@@ -8,6 +8,7 @@ from decimal import Decimal
 import pytest
 
 from karya.gateway.policy import PolicySet, evaluate, referenced_fields
+from tests.conftest import REPO_COMPANY
 
 
 def policies(*rules: dict) -> PolicySet:
@@ -108,7 +109,7 @@ def test_approver_role_required_for_approval_rules():
 def test_referenced_fields_and_meridian_policies():
     from karya.company import load_company
 
-    company = load_company()
+    company = load_company(REPO_COMPANY)
     decision = evaluate(company.policies, "erp", "create_invoice", {"amount": Decimal("184500.00"), "vendor_id": "V003"})
     assert decision.effect == "require_approval"
     assert decision.approver_roles == ["finance_manager"]
