@@ -70,6 +70,8 @@ class Settings:
     injection_llm_check: bool
     chromium_path: str
     sandbox_admin_token: str
+    openai_base_url: str      # any OpenAI-compatible API, e.g. Gemini's
+    llm_max_rpm: int          # pace model calls under a free tier's cap; 0 = no pacing
 
     @property
     def fast_model(self) -> str:
@@ -102,6 +104,8 @@ def load_settings() -> Settings:
         injection_llm_check=_bool("KARYA_INJECTION_LLM_CHECK", True),
         chromium_path=_str("KARYA_CHROMIUM_PATH"),
         sandbox_admin_token=_str("SANDBOX_ADMIN_TOKEN", "change-me-admin"),
+        openai_base_url=_str("OPENAI_BASE_URL"),
+        llm_max_rpm=_int("KARYA_LLM_MAX_RPM", 0),
     )
 
 

@@ -5,7 +5,9 @@ from __future__ import annotations
 from typing import Any
 
 from karya.config import Settings
-from karya.llm.base import LLMResponse, Message, ToolCall, ToolChoice, ToolSpec, Usage, parse_arguments, with_retries
+from karya.llm.base import LLMResponse, Message, Pacer, ToolCall, ToolChoice, ToolSpec, Usage, parse_arguments, with_retries
+
+OPENAI_DEFAULT_BASE_URL = "https://api.openai.com/v1"
 
 
 class OpenAIClient:
@@ -22,10 +24,12 @@ class OpenAIClient:
                 max_retries=0,  # retries are explicit (with_retries) so they are visible and bounded
             )
         else:
-            self._client = openai.OpenAI(api_key=settings.openai_api_key, max_retries=0)
+            # Passed explicitly so a blank or commented OPENAI_BASE_URL line in .env can't break it.
+            self._client = openai.OpenAI(api_key=settings.openai_api_key, base_url=settings.openai_base_url or OPENAI_DEFAULT_BASE_URL, max_retries=0)
         self.model = settings.llm_model
         self.fast_model = settings.fast_model
         self._parallel_flag_supported = True
+        self._pacer = Pacer(settings.llm_max_rpm)
 
     def _retryable(self, exc: Exception) -> bool:
         o = self._openai
@@ -51,12 +55,14 @@ class OpenAIClient:
                 kwargs["parallel_tool_calls"] = False  # one tool call per step (DECISIONS.md D13)
 
         def call() -> Any:
+            self._pacer.wait()
             try:
                 return self._client.chat.completions.create(**kwargs)
             except self._openai.BadRequestError as exc:
                 # Some models/deployments reject parallel_tool_calls; drop it once and remember.
                 if "parallel_tool_calls" in str(exc) and kwargs.pop("parallel_tool_calls", None) is not None:
                     self._parallel_flag_supported = False
+                    self._pacer.wait()
                     return self._client.chat.completions.create(**kwargs)
                 raise
 

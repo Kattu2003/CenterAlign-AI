@@ -46,6 +46,17 @@ Edit `.env`: set `LLM_PROVIDER` (`azure_openai` | `openai` | `anthropic`), `LLM_
 Azure deployment you have), optionally `LLM_MODEL_FAST` (a cheaper model for extraction, fact learning and injection checks),
 and the provider's key (plus endpoint and API version for Azure). The sandbox credentials in `.env.example` work as they are.
 
+**No paid key?** Any OpenAI-compatible API works. For example, a free Gemini key from Google AI Studio:
+`LLM_PROVIDER=openai`, `OPENAI_API_KEY=<the key>`, `OPENAI_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/`,
+`LLM_MODEL=` a Flash model that AI Studio marks free, and `KARYA_LLM_MAX_RPM` a little below your requests-per-minute cap
+(Karya spaces its calls, and waits out rate limits for up to a minute). Free tiers also cap requests per day, so run a
+few scenarios rather than the whole suite.
+
+**Windows notes:** activate with `.venv\Scripts\Activate.ps1` (if PowerShell refuses to run scripts, run
+`Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` once). If `playwright install chromium` is slow, skip it and point
+Karya at the Edge that ships with Windows:
+`KARYA_CHROMIUM_PATH=C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe` (an installed Chrome works too).
+
 ```bash
 karya config llm                     # one tiny call: is the key/model working?
 karya config check                   # validates company/ (connectors, policies, handbook, schemas)
@@ -88,7 +99,7 @@ macOS/Linux, `$env:KARYA_HEADLESS="0"` first in PowerShell).
 karya evals list
 karya evals run --chaos off --runs 1                       # all 12 scenarios once (model cost applies; tokens are reported)
 karya evals run --scenarios ap-happy,ap-approval-approve,ap-duplicate,ap-injection,hr-onboard --chaos heavy --runs 2
-pytest                                                     # 153 tests, no API key needed (1 skips without a key)
+pytest                                                     # 156 tests, no API key needed (1 skips without a key)
 ```
 
 Results go to `evals/results/<timestamp>.md/.json` and `evals/results/latest.md`.
@@ -239,7 +250,7 @@ From `evals/results/latest.md` (regenerate with the commands in the quick start)
 > running `karya evals run` with a key; LLM behaviour is nondeterministic, so expect below 100% and read the per-scenario
 > notes for the first failing check.
 
-What is verified deterministically, without a model (`pytest`: 153 tests, 28 of them drive real Chromium through the gateway
+What is verified deterministically, without a model (`pytest`: 156 tests, 28 of them drive real Chromium through the gateway
 against the live sandbox apps using a scripted agent):
 
 | Area | Covered by |
@@ -292,7 +303,7 @@ against the live sandbox apps using a scripted agent):
 ## Models, APIs, frameworks, services and pre-built components used
 
 - **LLM providers (configurable in `.env`):** Azure OpenAI, OpenAI or Anthropic, through their official Python SDKs
-  (`openai`, `anthropic`), using tool calling only. `LLM_MODEL` drives the worker, intake and verifier; `LLM_MODEL_FAST`
+  (`openai`, `anthropic`), using tool calling only; any OpenAI-compatible API (e.g. Gemini) through `OPENAI_BASE_URL`. `LLM_MODEL` drives the worker, intake and verifier; `LLM_MODEL_FAST`
   (optional) drives document extraction, fact learning and the injection check. **Model used for the eval table and video:**
   set by the author's `.env` when they are produced. **No model was called while building this repository** (no key in the
   build environment); every runtime test uses `ScriptedLLM`.
@@ -329,7 +340,7 @@ company/                Meridian's configuration: company.yaml, handbook/*.md, p
 sandbox/                the sandbox company: erp/, mail/, hr/ (FastAPI apps), common/ (auth, chaos, money, dates),
                         seed/ (data.yaml, seed.py, generate_pdfs.py), run.py, shared_drive/
 evals/                  suite.yaml (12 scenarios), results/latest.md
-tests/                  153 tests (unit + real-browser scripted runs)
+tests/                  156 tests (unit + real-browser scripted runs)
 docs/images/            screenshots used in this README
 data/  runs/            created at runtime: karya.db; per-task trace.jsonl, screens/, downloads/, report.md/json
 ARCHITECTURE.md  DECISIONS.md  DEMO.md  PROGRESS.md

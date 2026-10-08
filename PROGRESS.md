@@ -375,6 +375,16 @@ Done:
 
 Not done here (needs the author): recording the video, and the real-model eval run whose numbers go in the README.
 
+## After phase 12 — free-tier and Windows support
+
+- Rate limits: model calls now wait as long as the provider asks (`Retry-After`), else back off 2 s … 30 s (about a minute
+  in total) instead of giving up after 3 s; `KARYA_LLM_MAX_RPM` spaces calls under a free tier's requests-per-minute cap.
+- `OPENAI_BASE_URL` is a setting (any OpenAI-compatible API, e.g. Gemini's free tier) and is passed to the client
+  explicitly, so a blank or commented line in `.env` cannot break the default endpoint.
+- Documented `KARYA_CHROMIUM_PATH` (use an installed Edge/Chrome when the Chromium download is slow) and the PowerShell
+  activation steps. Tests: `tests/test_llm_clients.py` (Retry-After, backoff cap, pacing, base URL).
+  Full suite: 155 passed, 1 skipped.
+
 ## Open questions / author to-do before submission
 
 1. Put a key in `.env`, then `karya config llm` (one tiny call) and the happy path from the README quick start.

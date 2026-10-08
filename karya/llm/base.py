@@ -13,6 +13,7 @@ function calling with a single function whose parameters are a pydantic schema
 from __future__ import annotations
 
 import json
+import threading
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -98,17 +99,55 @@ def parse_arguments(raw: str | dict | None) -> dict[str, Any]:
     return value if isinstance(value, dict) else {"__invalid_json__": raw[:500]}
 
 
-def with_retries(fn: Callable[[], Any], is_retryable: Callable[[Exception], bool], attempts: int = 3) -> Any:
-    """Exponential backoff (1 s, 2 s) on rate limits / 5xx / connection errors.
-    Anything else, or the last failure, is raised: errors are never swallowed."""
-    for attempt in range(attempts):
+RETRY_DELAYS = (2.0, 4.0, 8.0, 15.0, 30.0)  # ~1 minute in total: outlasts a per-minute rate-limit window
+MAX_RETRY_AFTER = 60.0
+
+
+def _retry_after(exc: Exception) -> float | None:
+    """Seconds the provider asked us to wait (HTTP Retry-After), if it said so."""
+    headers = getattr(getattr(exc, "response", None), "headers", None)
+    if not headers:
+        return None
+    try:
+        return max(0.0, min(float(headers.get("retry-after", "")), MAX_RETRY_AFTER))
+    except (TypeError, ValueError):
+        return None
+
+
+def with_retries(fn: Callable[[], Any], is_retryable: Callable[[Exception], bool], delays: tuple[float, ...] = RETRY_DELAYS) -> Any:
+    """Retry rate limits / 5xx / connection errors: wait as long as the provider asks
+    (Retry-After), else back off 2 s ... 30 s. About a minute in total, so a free tier's
+    per-minute cap does not stop a task. Anything else, or the last failure, is raised:
+    errors are never swallowed."""
+    for attempt in range(len(delays) + 1):
         try:
             return fn()
         except Exception as exc:  # noqa: BLE001 - filtered by is_retryable
-            if attempt == attempts - 1 or not is_retryable(exc):
+            if attempt == len(delays) or not is_retryable(exc):
                 raise
-            time.sleep(2**attempt)
+            wait = _retry_after(exc)
+            time.sleep(wait if wait is not None else delays[attempt])
     raise AssertionError("unreachable")
+
+
+class Pacer:
+    """Spaces model calls to at most `per_minute` a minute (KARYA_LLM_MAX_RPM), so a
+    free tier's requests-per-minute cap is not hit in the first place. 0 = no pacing."""
+
+    def __init__(self, per_minute: int = 0) -> None:
+        self.interval = 60.0 / per_minute if per_minute > 0 else 0.0
+        self._next = 0.0
+        self._lock = threading.Lock()
+
+    def wait(self) -> None:
+        if not self.interval:
+            return
+        with self._lock:
+            now = time.monotonic()
+            if self._next > now:
+                time.sleep(self._next - now)
+                now = self._next
+            self._next = now + self.interval
 
 
 def schema_for(model_cls: type[BaseModel]) -> dict[str, Any]:

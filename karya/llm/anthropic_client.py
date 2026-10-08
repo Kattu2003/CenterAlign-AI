@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from karya.config import Settings
-from karya.llm.base import LLMResponse, Message, ToolCall, ToolChoice, ToolSpec, Usage, parse_arguments, with_retries
+from karya.llm.base import LLMResponse, Message, Pacer, ToolCall, ToolChoice, ToolSpec, Usage, parse_arguments, with_retries
 
 
 class AnthropicClient:
@@ -17,6 +17,7 @@ class AnthropicClient:
         self.model = settings.llm_model
         self.fast_model = settings.fast_model
         self.max_tokens = max_tokens
+        self._pacer = Pacer(settings.llm_max_rpm)
 
     def _retryable(self, exc: Exception) -> bool:
         a = self._anthropic
@@ -45,7 +46,11 @@ class AnthropicClient:
             choice["disable_parallel_tool_use"] = True  # one tool call per step (DECISIONS.md D13)
             kwargs["tool_choice"] = choice
 
-        response = with_retries(lambda: self._client.messages.create(**kwargs), self._retryable)
+        def call() -> Any:
+            self._pacer.wait()
+            return self._client.messages.create(**kwargs)
+
+        response = with_retries(call, self._retryable)
         text = "".join(block.text for block in response.content if block.type == "text")
         calls = [ToolCall(id=b.id, name=b.name, arguments=parse_arguments(b.input)) for b in response.content if b.type == "tool_use"]
         usage = Usage(response.usage.input_tokens, response.usage.output_tokens)

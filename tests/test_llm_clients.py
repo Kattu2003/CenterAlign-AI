@@ -181,3 +181,56 @@ def test_tool_schemas_are_inlined_and_portable():
     names = [s.name for s in registry.specs("worker")]
     assert "submit_verdicts" not in names and "finish" in names
     assert "finish" not in [s.name for s in registry.specs("verifier")]
+
+
+def test_retries_wait_as_long_as_the_provider_asks(monkeypatch):
+    waits = []
+    monkeypatch.setattr(base.time, "sleep", waits.append)
+    request = httpx.Request("POST", "https://api.example/v1/chat/completions")
+
+    class Limited(Exception):
+        def __init__(self, retry_after=None):
+            self.response = httpx.Response(429, request=request, headers={"retry-after": retry_after} if retry_after else {})
+
+    errors = [Limited("7"), Limited(), Limited("999")]
+
+    def fn():
+        if errors:
+            raise errors.pop(0)
+        return "ok"
+
+    assert base.with_retries(fn, lambda exc: isinstance(exc, Limited)) == "ok"
+    assert waits == [7.0, 4.0, 60.0]  # Retry-After honoured, else backoff; capped at a minute
+    with pytest.raises(Limited):
+        base.with_retries(lambda: (_ for _ in ()).throw(Limited()), lambda exc: True)
+    assert len(waits) == 3 + len(base.RETRY_DELAYS)  # gives up after about a minute of waiting
+
+
+def test_pacer_spaces_calls_under_a_requests_per_minute_cap(monkeypatch):
+    clock, waits = [100.0], []
+
+    def sleep(seconds):
+        waits.append(seconds)
+        clock[0] += seconds
+
+    monkeypatch.setattr(base.time, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(base.time, "sleep", sleep)
+    pacer = base.Pacer(per_minute=30)  # at most one call every 2 s
+    pacer.wait()
+    pacer.wait()
+    clock[0] += 5  # a slow step: no need to wait
+    pacer.wait()
+    pacer.wait()
+    assert waits == [2.0, 2.0]
+    base.Pacer(0).wait()
+    assert waits == [2.0, 2.0]
+
+
+def test_openai_compatible_endpoint_comes_from_settings(monkeypatch):
+    from karya.llm.openai_client import OpenAIClient
+
+    gemini = "https://generativelanguage.googleapis.com/v1beta/openai/"
+    client = OpenAIClient(settings(monkeypatch, OPENAI_API_KEY="k", OPENAI_BASE_URL=gemini, KARYA_LLM_MAX_RPM="8"), azure=False)
+    assert str(client._client.base_url) == gemini and client._pacer.interval == 7.5
+    monkeypatch.setenv("OPENAI_BASE_URL", "# a commented-out .env value")
+    assert str(OpenAIClient(load_settings(), azure=False)._client.base_url).startswith("https://api.openai.com/v1")
