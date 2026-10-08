@@ -216,3 +216,24 @@ Decisions not in the plan:
 - `karya run` keeps waiting while a task needs a person and resumes in the foreground when it is
   requeued; `karya resume <T-id>` continues a queued/waiting task (the plan's cut-list fallback, kept as
   a convenience).
+
+## Phase 6 — Reliability hardening
+
+Done (`tests/test_reliability.py`, 11 real-browser scripted runs with armed faults):
+- `commit_then_504` → the gateway reconciles ("returned HTTP 504, but the record exists
+  (ERP-INV-000104). The write succeeded; do not resubmit"), intent `committed` + `reconciled=1`,
+  exactly one record; a model that resubmits anyway is blocked ("Already done in this task").
+- `write_conflict_409` → intent `failed` ("Nothing was saved"), the resubmission commits → one record.
+- `session_expired` on `/invoices/new` → logged-out hint → `browser_login` keeps `?next=` and returns to
+  the form → completes; counted as a re-login in the report.
+- `session_expired` on the POST itself → the gateway reports "the form was NOT submitted" → refill → one record.
+- `http_500` ×2 on the form page and on the API → retried 2x (1 s, 3 s) → completes.
+- `label_drift` on every ERP and Mail page → completes (refs by name/role, never by text or id).
+- Stuck detection: identical actions → nudge → escalation; the same AP-002 denial twice → escalation;
+  step budget → escalation. Every forced escalation is still verified and reported.
+- Hardening: a click that times out on a slow server no longer returns a bare failure; it settles and
+  reports the page plus any write outcome the gateway recorded.
+
+Acceptance: all deterministic Phase 6 items pass. **Not run:** `karya sandbox chaos heavy --seed 7` with
+the three core scenarios × 3 runs — this measures a real model's adaptation and needs an API key; the eval
+harness (phase 10) runs it with `karya evals run --chaos heavy`.

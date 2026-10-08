@@ -296,12 +296,17 @@ class BrowserClick(Tool):
         is_link = bool(locator.evaluate("el => el.tagName === 'A'"))
         navigations_before = browser.nav_count
         browser.last_status = None
+        notes: list[str] = []
         try:
             # Never auto-retried: a click may submit a form (write).
             locator.click(timeout=NAV_TIMEOUT_MS)
         except Exception as exc:  # noqa: BLE001
-            return Observation(ok=False, summary=f"click {args.ref} failed", error=str(exc).splitlines()[0][:300])
-        notes = browser.settle()
+            if "Timeout" not in str(exc):
+                return Observation(ok=False, summary=f"click {args.ref} failed", error=str(exc).splitlines()[0][:300])
+            # A slow server: the click may still have submitted. Report what the page and the
+            # gateway saw (write outcomes included) instead of a bare failure.
+            notes.append("The click timed out waiting for the page; check the result below before doing anything else.")
+        notes += browser.settle()
         downloads = browser.save_downloads(wait_ms=2500 if is_link and browser.nav_count == navigations_before else 0)
         return browser.observe("browser_click", notes, downloads)
 
