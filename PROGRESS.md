@@ -11,8 +11,8 @@ Each entry: what is done, what is broken, open questions, and decisions the plan
   red-team scenario) is verified with unit tests and `ScriptedLLM` browser integration tests.
   Scenarios that need a real model (intake quality, the agent's own decisions, the eval table) must be
   run by the author with a key in `.env` — see "Open questions" at the end.
-- Branch: the plan says commit on `main`; this build commits to the session branch
-  `claude/pensive-wright-agon4r` (one commit per phase, with the plan's commit messages), to be merged.
+- Branch: everything is on `main`, one commit per phase with the plan's commit messages. It was built on a session
+  branch and moved to `main` with its history unchanged, so the hashes cited in the docs (phase 9 = `bb69d57`) hold.
 
 ## Phase 0 — Scaffold
 
@@ -386,6 +386,5 @@ Not done here (needs the author): recording the video, and the real-model eval r
 3. If a model-driven scenario fails, the per-scenario notes name the first failing check; `karya show <T-id> --trace`
    shows why. Prompt changes live in `karya/prompts/`, procedures in `company/handbook/`.
 4. Rehearse and record the video from `DEMO.md` with `KARYA_HEADLESS=0`; add the link to README "Demo video".
-5. Merge `claude/pensive-wright-agon4r` into `main` (the plan asked for `main`; this build used the session branch).
-   The phase 9 commit (`bb69d57`) touches nothing under `karya/` and keeps that property in a merge commit (a squash merge
-   would fold it into one commit; avoid squashing so `git show --stat` still proves it).
+5. Keep the per-phase history on `main` (no squash, rebase or force-push): `git show --stat bb69d57` is the proof that
+   the phase 9 commit touches nothing under `karya/`.
