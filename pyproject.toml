@@ -53,6 +53,9 @@ sandbox = ["*/templates/*.html", "common/static/*", "seed/*.yaml"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+filterwarnings = [
+    "ignore::DeprecationWarning:starlette.testclient",
+]
 markers = [
     "browser: integration tests that drive a real Chromium against the sandbox apps",
 ]

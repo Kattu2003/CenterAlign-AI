@@ -41,3 +41,39 @@ Acceptance: `pip install -e .` and `karya --help` work; `python -c "import karya
 creates `data/karya.db` with every table; deleting from `audit` is rejected by the trigger.
 (`playwright install chromium` was not needed here: the container ships Chromium 1194, which
 matches Playwright 1.56.0.)
+
+## Phase 1 — Sandbox company
+
+Done:
+- `sandbox/common/`: env-driven settings (temp dirs in tests), integer-paise money helpers with Indian
+  grouping, relative dates (`D-3`), session login + CSRF, chaos middleware + admin router, shared
+  templates/stylesheet, app factory.
+- Meridian ERP (8101) and Meridian Mail (8102) per plan §7.3–7.4, including the read-only `X-API-Key`
+  APIs, the bank-change and create-vendor forms (so AP-002/AP-003 are demonstrable) and app-side audit.
+- Seed data (`sandbox/seed/data.yaml`), 8 invoice PDFs in 3 layouts / 4 date formats / 3 amount
+  formats, exact GST arithmetic, the 6pt grey injection on AF-3307, and a pypdf self-check on generation.
+- `sandbox/run.py` (`up/down/reset/status`, chaos profile, arm/disarm) + `karya sandbox ...` commands.
+- `tests/test_sandbox.py`: 14 in-process tests covering every §7.8 acceptance item.
+
+Acceptance: `karya sandbox reset && karya sandbox up && karya sandbox status` → both apps up (also
+from another working directory); all §7.8 checks covered by tests and pass; CLI `arm`/`chaos`
+verified against the live apps; `reset` clears chaos on running apps.
+
+Decisions not in the plan:
+- The sandbox never imports `karya` (it is the environment, not the runtime); the CLI imports
+  `sandbox` lazily so the runtime never depends on it.
+- Cookie names differ per app (`erp_session`, `mail_session`): cookies are per host, not per port,
+  so apps on 127.0.0.1 would otherwise overwrite each other's sessions.
+- After a lost session, a POST redirects to `/login?next=<the form it came from>` (taken from the
+  Referer), so the agent lands back on the empty form and must refill it.
+- `session_expired`: profiles only expire sessions on form GETs; armed faults can also hit POSTs.
+  `/login` and `/logout` are never chaos targets for session expiry.
+- `commit_then_504` is implemented generically: the middleware lets the app run, and if the app
+  returned success (< 400) it swaps the response for a 504. A failed validation (400) does not consume
+  the armed fault.
+- The mail API does not expose the seed keys (`M1`…`M9`); only eval checks use them, via the DB.
+- `seed_meta.json` records the D used at reset, so ground-truth checks resolve `{D+27}` against the
+  same day even if a run crosses midnight.
+- `reset` regenerates `sandbox/shared_drive/finance/` and empties `outbox/` (generated sandbox state,
+  as the plan's `reset` description says); nothing outside the sandbox is touched.
+- IST is a fixed +05:30 offset in the sandbox (India has no DST), avoiding a `tzdata` dependency on Windows.

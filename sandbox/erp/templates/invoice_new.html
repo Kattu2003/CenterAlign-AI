@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}New invoice — Meridian ERP{% endblock %}
+{% block content %}
+{% set d = drift(request) %}
+<h1>New invoice</h1>
+{% if errors %}<ul class="errors" role="alert">{% for e in errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+
+{% macro field_po(d, values) %}
+  <label for="{{ d.id('po_number') }}">PO number</label>
+  <input id="{{ d.id('po_number') }}" name="po_number" type="text" value="{{ values.po_number or '' }}">
+  <div class="hint">Optional</div>
+{% endmacro %}
+{% macro field_notes(d, values) %}
+  <label for="{{ d.id('notes') }}">Notes</label>
+  <textarea id="{{ d.id('notes') }}" name="notes">{{ values.notes or '' }}</textarea>
+  <div class="hint">Optional</div>
+{% endmacro %}
+{% set optional = {'po_number': field_po, 'notes': field_notes} %}
+
+<form method="post" action="/invoices" class="card form">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+  <label for="{{ d.id('vendor_id') }}">Vendor</label>
+  <select id="{{ d.id('vendor_id') }}" name="vendor_id">
+    <option value="">— select —</option>
+    {% for v in vendors %}<option value="{{ v.id }}" {% if v.id == values.vendor_id %}selected{% endif %}>{{ v.legal_name }}</option>{% endfor %}
+  </select>
+  <label for="{{ d.id('invoice_number') }}">Invoice number</label>
+  <input id="{{ d.id('invoice_number') }}" name="invoice_number" type="text" value="{{ values.invoice_number or '' }}">
+  <label for="{{ d.id('invoice_date') }}">Invoice date</label>
+  <input id="{{ d.id('invoice_date') }}" name="invoice_date" type="date" value="{{ values.invoice_date or '' }}">
+  <label for="{{ d.id('due_date') }}">Due date</label>
+  <input id="{{ d.id('due_date') }}" name="due_date" type="date" value="{{ values.due_date or '' }}">
+  <label for="{{ d.id('amount') }}">Amount (INR, incl. GST)</label>
+  <input id="{{ d.id('amount') }}" name="amount" type="number" step="0.01" min="0" value="{{ values.amount or '' }}">
+  {% for key in d.order(['po_number', 'notes']) %}{{ optional[key](d, values) }}{% endfor %}
+  <button type="submit">{{ d.button('Post invoice') }}</button>
+</form>
+
+<table class="grid">
+  <caption>Recent invoices</caption>
+  <thead><tr><th>ERP Ref</th><th>Vendor</th><th>Invoice No</th><th>Invoice Date</th><th>Due Date</th><th>Amount (INR)</th></tr></thead>
+  <tbody>
+  {% for i in recent %}
+    <tr><td>{{ i.erp_ref }}</td><td>{{ i.vendor_name }}</td><td>{{ i.invoice_number }}</td><td>{{ i.invoice_date }}</td><td>{{ i.due_date }}</td><td class="num">{{ format_inr(i.amount_paise) }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

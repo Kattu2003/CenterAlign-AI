@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — Meridian ERP{% endblock %}
+{% block content %}
+<h1>Finance dashboard</h1>
+<div class="tiles">
+  <div class="card tile"><div class="muted">Active vendors</div><div class="big">{{ counts.vendors }}</div><a href="/vendors">Vendors</a></div>
+  <div class="card tile"><div class="muted">Posted invoices</div><div class="big">{{ counts.invoices }}</div><a href="/invoices">Invoices</a></div>
+  <div class="card tile"><div class="muted">Accounts payable</div><div class="big">+</div><a href="/invoices/new">New invoice</a></div>
+</div>
+<p class="muted">Meridian ERP is the finance system of record. Vendor invoices are posted here after checks by the AP team.</p>
+{% endblock %}

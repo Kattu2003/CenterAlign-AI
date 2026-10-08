@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Vendors — Meridian ERP{% endblock %}
+{% block content %}
+{% set d = drift(request) %}
+<h1>Vendor master</h1>
+<form method="get" action="/vendors" class="searchbar">
+  <div>
+    <label for="{{ d.id('q') }}">Search vendors</label>
+    <input id="{{ d.id('q') }}" name="q" type="search" value="{{ q }}" placeholder="Name, ID or GSTIN">
+  </div>
+  <button type="submit">{{ d.button('Search') }}</button>
+</form>
+<table class="grid">
+  <caption>Vendors ({{ vendors|length }})</caption>
+  <thead><tr><th>Vendor ID</th><th>Legal name</th><th>GSTIN</th><th>Category</th><th>Status</th></tr></thead>
+  <tbody>
+  {% for v in vendors %}
+    <tr>
+      <td><a href="/vendors/{{ v.id }}">{{ v.id }}</a></td>
+      <td>{{ v.legal_name }}</td>
+      <td>{{ v.gstin or '—' }}</td>
+      <td>{{ v.category or '—' }}</td>
+      <td>{{ v.status }}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="5" class="muted">No vendors match.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+<p><a href="/vendors/new">Create vendor</a> <span class="muted">(procurement onboarding only)</span></p>
+{% endblock %}

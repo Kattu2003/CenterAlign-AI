@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}{{ app_title }}{% endblock %}</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">{{ app_title }}</div>
+    {% set user = current_user(request) %}
+    {% if user %}
+    <nav class="nav">
+      {% for href, label in nav %}<a href="{{ href }}">{{ label }}</a>{% endfor %}
+    </nav>
+    <div class="user">
+      Signed in as <strong>{{ user }}</strong>
+      <form method="post" action="/logout" class="inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+        <button type="submit" class="linkish">Sign out</button>
+      </form>
+    </div>
+    {% endif %}
+  </header>
+  <main class="container">
+    {% block content %}{% endblock %}
+  </main>
+  <footer class="footer">Meridian Components Pvt Ltd &middot; internal system (sandbox)</footer>
+</body>
+</html>

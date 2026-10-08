@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Invoices — Meridian ERP{% endblock %}
+{% block content %}
+{% set d = drift(request) %}
+<h1>Posted invoices</h1>
+<form method="get" action="/invoices" class="searchbar">
+  <div>
+    <label for="{{ d.id('vendor_id') }}">Vendor</label>
+    <select id="{{ d.id('vendor_id') }}" name="vendor_id">
+      <option value="">All vendors</option>
+      {% for v in vendors %}<option value="{{ v.id }}" {% if v.id == vendor_id %}selected{% endif %}>{{ v.legal_name }}</option>{% endfor %}
+    </select>
+  </div>
+  <div>
+    <label for="{{ d.id('invoice_number') }}">Invoice number (exact)</label>
+    <input id="{{ d.id('invoice_number') }}" name="invoice_number" type="text" value="{{ invoice_number }}">
+  </div>
+  <div>
+    <label for="{{ d.id('q') }}">Search</label>
+    <input id="{{ d.id('q') }}" name="q" type="search" value="{{ q }}" placeholder="Ref, number, vendor, notes">
+  </div>
+  <button type="submit">{{ d.button('Search') }}</button>
+</form>
+<table class="grid">
+  <caption>Invoices ({{ invoices|length }})</caption>
+  <thead><tr><th>ERP Ref</th><th>Vendor</th><th>Invoice No</th><th>Invoice Date</th><th>Due Date</th><th>Amount (INR)</th><th>Status</th><th>Entered By</th><th>Entered At</th></tr></thead>
+  <tbody>
+  {% for i in invoices %}
+    <tr>
+      <td><a href="/invoices/{{ i.id }}">{{ i.erp_ref }}</a></td>
+      <td>{{ i.vendor_name or i.vendor_id }}</td>
+      <td>{{ i.invoice_number }}</td>
+      <td>{{ i.invoice_date }}</td>
+      <td>{{ i.due_date }}</td>
+      <td class="num">{{ format_inr(i.amount_paise) }}</td>
+      <td>{{ i.status }}</td>
+      <td>{{ i.entered_by }}</td>
+      <td>{{ i.entered_at }}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="9" class="muted">No invoices match.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}{{ m.subject }} — Meridian Mail{% endblock %}
+{% block content %}
+{% set d = drift(request) %}
+{% if labelled %}<p class="banner success" role="alert">Label added: {{ labelled }}</p>{% endif %}
+{% if error %}<p class="banner error" role="alert">{{ error }}</p>{% endif %}
+<h1>{{ m.subject }}</h1>
+<div class="card">
+  <dl class="details">
+    <dt>From</dt><dd>{{ m.from_name }} &lt;{{ m.from_email }}&gt;</dd>
+    <dt>To</dt><dd>ap@meridian.example</dd>
+    <dt>Received</dt><dd>{{ m.received_at|when }}</dd>
+    <dt>Labels</dt><dd>{% for l in labels_now %}<span class="tag">{{ l }}</span>{% else %}<span class="muted">none</span>{% endfor %}</dd>
+  </dl>
+</div>
+<div class="card">
+  <div class="body-text">{{ m.body }}</div>
+</div>
+<h2>Attachments</h2>
+{% if attachments %}
+<ul>
+  {% for a in attachments %}<li><a href="{{ a.url }}">{{ a.filename }}</a> <span class="muted">(PDF)</span></li>{% endfor %}
+</ul>
+{% else %}
+<p class="muted">No attachments.</p>
+{% endif %}
+<h2>Label this message</h2>
+<form method="post" action="/messages/{{ m.id }}/labels" class="card form">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+  <label for="{{ d.id('label') }}">Label</label>
+  <select id="{{ d.id('label') }}" name="label">
+    <option value="">— choose —</option>
+    {% for l in labels %}<option value="{{ l }}">{{ l }}</option>{% endfor %}
+  </select>
+  <button type="submit">{{ d.button('Apply label') }}</button>
+</form>
+<p><a href="/inbox">Back to inbox</a></p>
+{% endblock %}

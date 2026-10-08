@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}{{ vendor.legal_name }} — Meridian ERP{% endblock %}
+{% block content %}
+{% set d = drift(request) %}
+<h1>{{ vendor.legal_name }}</h1>
+{% if updated %}<p class="banner success" role="alert">Bank details updated for {{ vendor.id }}.</p>{% endif %}
+{% if created %}<p class="banner success" role="alert">Vendor created — {{ vendor.id }}</p>{% endif %}
+<div class="card">
+  <dl class="details">
+    <dt>Vendor ID</dt><dd>{{ vendor.id }}</dd>
+    <dt>Legal name</dt><dd>{{ vendor.legal_name }}</dd>
+    <dt>GSTIN</dt><dd>{{ vendor.gstin or '—' }}</dd>
+    <dt>Category</dt><dd>{{ vendor.category or '—' }}</dd>
+    <dt>Status</dt><dd>{{ vendor.status }}</dd>
+    <dt>Phone on file</dt><dd>{{ vendor.phone or '—' }}</dd>
+    <dt>Bank account</dt><dd>{{ masked }}</dd>
+    <dt>IFSC</dt><dd>{{ vendor.ifsc or '—' }}</dd>
+  </dl>
+</div>
+<h2>Update bank details</h2>
+{% if errors %}<ul class="errors" role="alert">{% for e in errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+<form method="post" action="/vendors/{{ vendor.id }}/bank" class="card form">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+  <label for="{{ d.id('account_number') }}">New account number</label>
+  <input id="{{ d.id('account_number') }}" name="account_number" type="text" inputmode="numeric">
+  <label for="{{ d.id('ifsc') }}">IFSC</label>
+  <input id="{{ d.id('ifsc') }}" name="ifsc" type="text">
+  <label for="{{ d.id('reason') }}">Reason for change</label>
+  <textarea id="{{ d.id('reason') }}" name="reason"></textarea>
+  <button type="submit">{{ d.button('Update bank details') }}</button>
+</form>
+<p><a href="/invoices?vendor_id={{ vendor.id }}">Invoices for this vendor</a></p>
+{% endblock %}

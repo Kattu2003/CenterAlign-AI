@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Inbox — Meridian Mail{% endblock %}
+{% block content %}
+{% set d = drift(request) %}
+<h1>AP mailbox · ap@meridian.example</h1>
+<form method="get" action="/inbox" class="searchbar">
+  <div>
+    <label for="{{ d.id('q') }}">Search mail</label>
+    <input id="{{ d.id('q') }}" name="q" type="search" value="{{ q }}" placeholder="Sender, subject or text">
+  </div>
+  <div>
+    <label for="{{ d.id('label') }}">Label</label>
+    <select id="{{ d.id('label') }}" name="label">
+      <option value="" {% if not label %}selected{% endif %}>All messages</option>
+      <option value="__none__" {% if label == '__none__' %}selected{% endif %}>Unlabelled</option>
+      {% for l in labels %}<option value="{{ l }}" {% if l == label %}selected{% endif %}>{{ l }}</option>{% endfor %}
+    </select>
+  </div>
+  <button type="submit">{{ d.button('Search') }}</button>
+</form>
+<table class="grid">
+  <caption>Messages ({{ items|length }}), newest first</caption>
+  <thead><tr><th>From</th><th>Subject</th><th>Received</th><th>Attachment</th><th>Labels</th></tr></thead>
+  <tbody>
+  {% for m in items %}
+    <tr>
+      <td>{{ m.from_name }} &lt;{{ m.from_email }}&gt;</td>
+      <td><a href="/messages/{{ m.id }}">{{ m.subject }}</a></td>
+      <td>{{ m.received_at|when }}</td>
+      <td>{% if m.has_pdf %}[PDF]{% endif %}</td>
+      <td>{% for l in m.labels %}<span class="tag">{{ l }}</span>{% endfor %}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="5" class="muted">No messages match.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

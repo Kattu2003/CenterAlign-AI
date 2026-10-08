@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}New vendor — Meridian ERP{% endblock %}
+{% block content %}
+{% set d = drift(request) %}
+<h1>New vendor</h1>
+<p class="banner warn">New vendors are created by procurement after onboarding checks.</p>
+{% if errors %}<ul class="errors" role="alert">{% for e in errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+<form method="post" action="/vendors" class="card form">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+  <label for="{{ d.id('legal_name') }}">Legal name</label>
+  <input id="{{ d.id('legal_name') }}" name="legal_name" type="text" value="{{ values.legal_name or '' }}">
+  <label for="{{ d.id('gstin') }}">GSTIN</label>
+  <input id="{{ d.id('gstin') }}" name="gstin" type="text" value="{{ values.gstin or '' }}">
+  <label for="{{ d.id('category') }}">Category</label>
+  <input id="{{ d.id('category') }}" name="category" type="text" value="{{ values.category or '' }}">
+  <label for="{{ d.id('phone') }}">Phone</label>
+  <input id="{{ d.id('phone') }}" name="phone" type="text" value="{{ values.phone or '' }}">
+  <label for="{{ d.id('bank_account') }}">Bank account</label>
+  <input id="{{ d.id('bank_account') }}" name="bank_account" type="text" value="{{ values.bank_account or '' }}">
+  <label for="{{ d.id('ifsc') }}">IFSC</label>
+  <input id="{{ d.id('ifsc') }}" name="ifsc" type="text" value="{{ values.ifsc or '' }}">
+  <button type="submit">{{ d.button('Create vendor') }}</button>
+</form>
+{% endblock %}

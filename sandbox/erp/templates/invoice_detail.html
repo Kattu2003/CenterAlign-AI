@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}{{ inv.erp_ref }} — Meridian ERP{% endblock %}
+{% block content %}
+{% if posted %}<p class="banner success" role="alert">Invoice posted — {{ inv.erp_ref }}</p>{% endif %}
+<h1>Invoice {{ inv.erp_ref }}</h1>
+<div class="card">
+  <dl class="details">
+    <dt>ERP Ref</dt><dd>{{ inv.erp_ref }}</dd>
+    <dt>Vendor</dt><dd>{{ inv.vendor_name }} ({{ inv.vendor_id }})</dd>
+    <dt>Invoice No</dt><dd>{{ inv.invoice_number }}</dd>
+    <dt>Invoice Date</dt><dd>{{ inv.invoice_date }}</dd>
+    <dt>Due Date</dt><dd>{{ inv.due_date }}</dd>
+    <dt>Amount (INR)</dt><dd>{{ format_inr(inv.amount_paise) }}</dd>
+    <dt>PO number</dt><dd>{{ inv.po_number or '—' }}</dd>
+    <dt>Notes</dt><dd>{{ inv.notes or '—' }}</dd>
+    <dt>Status</dt><dd>{{ inv.status }}</dd>
+    <dt>Entered By</dt><dd>{{ inv.entered_by }}</dd>
+    <dt>Entered At</dt><dd>{{ inv.entered_at }}</dd>
+  </dl>
+</div>
+<p><a href="/invoices">All invoices</a> · <a href="/invoices/new">New invoice</a></p>
+{% endblock %}

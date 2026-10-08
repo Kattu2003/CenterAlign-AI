@@ -10,6 +10,7 @@ from typing import Optional
 
 import typer
 from rich.console import Console
+from rich.table import Table
 
 app = typer.Typer(help="Karya: an AI employee that completes company work.", no_args_is_help=True)
 sandbox_app = typer.Typer(help="Manage the Meridian sandbox apps.", no_args_is_help=True)
@@ -29,28 +30,77 @@ def _todo(phase: int) -> None:
     raise typer.Exit(code=2)
 
 
+# --- sandbox (the fake company's systems; imported lazily so the runtime never depends on it) ---
+
+
 @sandbox_app.command("up")
 def sandbox_up() -> None:
-    """Start the sandbox apps."""
-    _todo(1)
+    """Start the sandbox apps (ERP 8101, Mail 8102, HR 8103)."""
+    from sandbox import run as sandbox_run
+
+    for name, message in sandbox_run.up():
+        console.print(f"[bold]{name}[/bold]: {message}")
 
 
 @sandbox_app.command("down")
 def sandbox_down() -> None:
-    """Stop the sandbox apps."""
-    _todo(1)
+    """Stop the sandbox apps started by `karya sandbox up`."""
+    from sandbox import run as sandbox_run
+
+    for name, message in sandbox_run.down() or [("sandbox", "nothing to stop")]:
+        console.print(f"[bold]{name}[/bold]: {message}")
 
 
 @sandbox_app.command("reset")
 def sandbox_reset() -> None:
-    """Re-seed sandbox databases, PDFs and shared drive."""
-    _todo(1)
+    """Re-seed sandbox databases, invoice PDFs and shared drive (never touches Karya's DB or memory)."""
+    from sandbox import run as sandbox_run
+
+    base = sandbox_run.reset()
+    console.print(f"Sandbox reset. Seed dates are relative to D = [bold]{base.isoformat()}[/bold] (Asia/Kolkata).")
 
 
 @sandbox_app.command("status")
 def sandbox_status() -> None:
     """Show which sandbox apps respond."""
-    _todo(1)
+    from sandbox import run as sandbox_run
+
+    table = Table(title="Sandbox apps")
+    for column in ("App", "URL", "Status", "PID"):
+        table.add_column(column)
+    for row in sandbox_run.status():
+        state = "[green]up[/green]" if row["up"] else "[red]down[/red]"
+        table.add_row(row["app"], row["url"], state, str(row["pid"] or "—"))
+    console.print(table)
+
+
+@sandbox_app.command("chaos")
+def sandbox_chaos(
+    profile: str = typer.Argument(..., help="off | light | heavy"),
+    seed: int = typer.Option(0, help="RNG seed (reproducible chaos)"),
+) -> None:
+    """Set the chaos profile on every running sandbox app."""
+    from sandbox import run as sandbox_run
+
+    result = sandbox_run.set_chaos(profile, seed)
+    if not result:
+        console.print("[yellow]No sandbox apps are running.[/yellow]")
+    for name, state in result.items():
+        console.print(f"[bold]{name}[/bold]: profile={state['profile']} seed={state['seed']}")
+
+
+@sandbox_app.command("arm")
+def sandbox_arm(
+    fault: str = typer.Argument(..., help="http_500 | slow | session_expired | label_drift | commit_then_504 | write_conflict_409"),
+    count: int = typer.Option(1, help="How many matching requests get the fault"),
+    app_name: str = typer.Option("erp", "--app", help="Which sandbox app"),
+    path: Optional[str] = typer.Option(None, help="Only requests to this path (glob), e.g. /invoices/new"),
+) -> None:
+    """Arm a deterministic fault: the next N matching requests get it."""
+    from sandbox import run as sandbox_run
+
+    state = sandbox_run.arm(app_name, fault, count, path)
+    console.print(f"[bold]{app_name}[/bold]: armed {state['armed']}")
 
 
 @config_app.command("check")
