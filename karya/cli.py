@@ -491,11 +491,9 @@ def _learner():
         llm = build_llm()
     except LLMConfigError:
         return None
-    from functools import partial
+    from karya.memory.learning import learner_for
 
-    from karya.memory import learning
-
-    return partial(learning.learn, llm=llm)
+    return learner_for(llm)
 
 
 @app.command()
@@ -579,9 +577,56 @@ def audit(task_id: str) -> None:
     console.print(table)
 
 @memory_app.command("list")
-def memory_list() -> None:
-    """List learned facts."""
-    _todo(7)
+def memory_list(include_forgotten: bool = typer.Option(False, "--all", help="Include forgotten facts")) -> None:
+    """Learned company facts, with provenance."""
+    from karya import db
+    from karya.config import get_settings
+    from karya.memory import store
+
+    conn = db.connect(get_settings().db_path)
+    facts = store.list_facts(conn, include_inactive=include_forgotten)
+    if not facts:
+        console.print("No learned facts yet.")
+        return
+    table = Table(title="Company memory · learned facts")
+    for column in ("Fact", "Statement", "Provenance", "Active"):
+        table.add_column(column)
+    for fact in facts:
+        table.add_row(fact.id, fact.statement, fact.provenance(), "yes" if fact.active else "[dim]forgotten[/dim]")
+    console.print(table)
+
+
+@memory_app.command("search")
+def memory_search(query: str) -> None:
+    """Search the handbook, learned facts and past tasks (what the agent would retrieve)."""
+    from karya import db
+    from karya.company import load_company
+    from karya.config import get_settings
+    from karya.memory.retrieval import Retriever
+
+    settings = get_settings()
+    found = Retriever(load_company(settings.company_dir), db.connect(settings.db_path)).retrieve(query)
+    for hit in found.handbook + found.facts + found.episodes:
+        origin = f" — {hit.provenance}" if hit.provenance else ""
+        console.print(f"[bold]{hit.id}[/bold] [dim]({hit.kind}, score {hit.score:.2f})[/dim] {hit.title}{origin}")
+        console.print(f"   {hit.text[:300]}")
+    if not found.ids():
+        console.print("Nothing relevant found.")
+
+
+@memory_app.command("forget")
+def memory_forget(fact_id: str, by: str = typer.Option("cli", "--by", help="Who is removing it (audited)")) -> None:
+    """Deactivate a learned fact (audited; history is kept)."""
+    from karya import db
+    from karya.config import get_settings
+    from karya.memory import store
+
+    conn = db.connect(get_settings().db_path)
+    if store.forget_fact(conn, fact_id, by):
+        console.print(f"[yellow]{fact_id} forgotten; it will no longer be used.[/yellow]")
+    else:
+        console.print(f"[red]No active fact {fact_id}.[/red]")
+        raise typer.Exit(code=1)
 
 
 @evals_app.command("run")

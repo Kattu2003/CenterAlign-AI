@@ -237,3 +237,29 @@ Done (`tests/test_reliability.py`, 11 real-browser scripted runs with armed faul
 Acceptance: all deterministic Phase 6 items pass. **Not run:** `karya sandbox chaos heavy --seed 7` with
 the three core scenarios × 3 runs — this measures a real model's adaptation and needs an API key; the eval
 harness (phase 10) runs it with `karya evals run --chaos heavy`.
+
+## Phase 7 — Company memory learning
+
+Done:
+- `karya/memory/learning.py`: answers (unless `--no-remember`), approval notes and rejection reasons →
+  fast model (`fact_learning.md`, forced `submit_fact`) → one standalone statement + entities, or
+  "not durable". Stored with provenance (who, when, task, question/approval id); identical statements
+  are not stored twice; learning failures never block the answer/decision (audited instead).
+- Retrieval: BM25Plus per layer (handbook / facts / episodes) with an entity-overlap boost for facts;
+  facts are shown in the model's context with ids and provenance; the report's "Company knowledge used"
+  lists facts that were in context.
+- CLI: `karya memory list [--all]`, `karya memory search <q>`, `karya memory forget <F-id> [--by]`.
+
+Acceptance (scripted agent + scripted fast model, real browser, `tests/test_memory_learning.py`):
+the ambiguous request investigates (finds both Acmes), asks with concrete options, the answer becomes
+F-0001 (learned from Arjun Rao, task, Q-id) and AI/2026/0917 is posted (ALL-7781 is not); after
+`sandbox reset` with memory kept, the same request asks zero questions, the intake prompt contains
+F-0001 and the report cites it; after `forget`, F-0001 no longer reaches the model. Whether a real model
+then decides *not to ask* is model behaviour: covered by the eval scenarios `ap-ambiguous-ask` and
+`ap-ambiguous-learned` once a key is available.
+
+Decisions not in the plan:
+- Facts are deactivated, never deleted (`forget` is audited) so the history of what was believed stays.
+- Rejection reasons go through the same learner; the model usually marks them not durable.
+- Test infrastructure: every real-browser test gets its own runtime DB and runs folder (the
+  `fresh_sandbox` fixture), so a task one test leaves `queued` can never be claimed by another.

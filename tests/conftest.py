@@ -121,12 +121,17 @@ def live_sandbox(tmp_root):
 
 
 @pytest.fixture()
-def fresh_sandbox(live_sandbox):
-    """Re-seed the sandbox data and clear chaos before a test."""
+def fresh_sandbox(live_sandbox, tmp_path, monkeypatch):
+    """Re-seed the sandbox data, clear chaos, and give the test its own runtime DB and runs dir
+    (so a task left queued by one test can never be claimed by another)."""
     import importlib
 
+    from karya.config import reset_settings
     from sandbox.seed.seed import reset_all
 
+    monkeypatch.setenv("KARYA_DB_PATH", str(tmp_path / "karya.db"))
+    monkeypatch.setenv("KARYA_RUNS_DIR", str(tmp_path / "runs"))
+    reset_settings()
     base = reset_all()
     for module in LIVE_APPS.values():
         if importlib.util.find_spec(module) is not None:
