@@ -164,14 +164,14 @@ class FilesRead(Tool):
 
 class ExtractArgs(ToolArgs):
     path: str = Field(description="Virtual path of the document, e.g. downloads/AI-2026-0917.pdf")
-    schema_name: str = Field(default="invoice", alias="schema", description="Company document schema to extract, e.g. invoice")
+    schema_name: str = Field(alias="schema", description="Name of a company document schema (listed under DOCUMENT SCHEMAS in the company context)")
 
     model_config = {"populate_by_name": True, "extra": "forbid"}
 
 
 class FilesExtract(Tool):
     name = "files_extract"
-    description = "Extract a company document schema (e.g. invoice) from a file. The model copies values as printed; code normalizes amounts and dates and runs the schema's checks (e.g. subtotal + tax = total)."
+    description = "Extract a company document schema from a file. The model copies values as printed; code normalizes amounts and dates and runs the schema's checks (e.g. parts that must add up, dates that must be in order)."
     Args = ExtractArgs
 
     def run(self, args: ExtractArgs, session: "ToolSession") -> Observation:

@@ -229,7 +229,7 @@ class BrowserOpen(Tool):
         target = args.url.strip()
         if not re.match(r"^https?://", target):
             if not browser.has_page():
-                return Observation(ok=False, summary="relative URL with no open page", error="Use a full URL such as http://127.0.0.1:8101/invoices (see the connectors list).")
+                return Observation(ok=False, summary="relative URL with no open page", error="Use a full URL: a connector's base_url (see SYSTEMS in the company context) plus a path.")
             target = urljoin(browser.page.url, target)
         retries, notes, downloads = 0, [], []
         for attempt in range(3):

@@ -12,6 +12,8 @@ Each entry: **Decision · Alternatives considered · Why · Trade-off · What wo
 ## D8 Goal Spec with success criteria before acting
 ## D9 Independent read-only verifier + deterministic lookups
 ## D10 Company-specific config separated from the runtime (`company/`)
+
+_Pre-phase-9 note:_ before adding HR onboarding as a configuration-only change, the last Meridian-flavoured defaults were removed from `karya/` in a separate commit: `files_extract` no longer defaults to the `invoice` schema (the model must name a schema from the company context), an error message no longer cites an ERP URL, and the system prompt's document tip is generic. None of these was needed for HR to work; they were removed so that `karya/` contains no company knowledge at all.
 ## D11 Memory: authored handbook vs learned facts with provenance; humans can forget facts
 ## D12 SQLite queue with leases (and how it maps to production)
 ## D13 One tool call per step, mandatory `why`

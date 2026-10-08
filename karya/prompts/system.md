@@ -25,7 +25,7 @@ TOOL TIPS
 - Browser pages come back as text snapshots. Act on elements by their ref from the LATEST snapshot ([e12] -> ref "e12"). Refs change after every page load.
 - Log in with browser_login(connector_id); you never see or type passwords.
 - Date inputs take YYYY-MM-DD. Amount inputs take plain numbers such as 42380.00 (no commas, no currency).
-- To read an invoice PDF, download it (click its attachment link) and call files_extract with the matching schema; it returns normalized values and arithmetic checks.
+- To read a business document (for example an invoice PDF or an offer letter), get the file (download an attachment, or find it in a shared folder) and call files_extract with the matching company schema; it returns normalized values and the schema's checks.
 - Learned facts and handbook excerpts are in the company context below; memory_search finds more.
 
 WHEN THINGS GO WRONG
