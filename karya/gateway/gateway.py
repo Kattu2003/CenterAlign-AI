@@ -77,14 +77,22 @@ class ApiResult:
     url: str = ""
 
 
-def page(title: str, message: str, detail: str = "") -> str:
-    """The HTML the browser shows when the gateway answers instead of the app."""
+TONES = {"block": "#c0392b", "hold": "#b7791f", "info": "#2f6fb0"}
+
+
+def page(title: str, message: str, detail: str = "", tone: str = "block") -> str:
+    """The HTML the browser shows when the gateway answers instead of the app
+    (it also appears in the task's screenshots, so it is styled to be readable)."""
+    color = TONES.get(tone, TONES["block"])
     extra = f"<p>{html.escape(detail)}</p>" if detail else ""
+    style = (
+        "body{font-family:-apple-system,'Segoe UI',Roboto,Arial,sans-serif;background:#f5f7fa;margin:0;padding:40px}"
+        f".card{{max-width:760px;margin:0 auto;background:#fff;border:1px solid #d9e2ec;border-left:6px solid {color};border-radius:6px;padding:18px 26px}}"
+        f"h1{{font-size:22px;margin:0 0 10px;color:{color}}}p{{font-size:15px;line-height:1.5;color:#1f2933}}small{{color:#616e7c}}"
+    )
     return (
-        "<!doctype html><html><head><meta charset='utf-8'>"
-        f"<title>{html.escape(title)} — Karya gateway</title></head>"
-        f"<body><main><h1>{html.escape(title)}</h1>"
-        f"<p role='alert'>{html.escape(message)}</p>{extra}"
+        f"<!doctype html><html><head><meta charset='utf-8'><title>{html.escape(title)} — Karya gateway</title><style>{style}</style></head>"
+        f"<body><main class='card'><h1>{html.escape(title)}</h1><p role='alert'>{html.escape(message)}</p>{extra}"
         "<p><small>Answered by the Karya gateway, not by the company app.</small></p></main></body></html>"
     )
 
@@ -242,7 +250,7 @@ class Gateway:
             scope = approvals.scope_hash(connector.id, action.name, fields, set(action.idempotency_key) | referenced_fields(policy.deciding))
             approved = approvals.find_by_scope(self.conn, self.task_id, scope, "approved")
             rejected = approvals.find_by_scope(self.conn, self.task_id, scope, "rejected")
-            rule_text = "; ".join(f"rule {r.id}: {r.description}" for r in policy.deciding)
+            rule_text = "; ".join(f"rule {r.id}: {r.description.rstrip('.')}" for r in policy.deciding)
             if approved is not None:
                 approval_id = approved["id"]
                 message = f"Using approval {approval_id} granted by {approved['decided_by']} ({rule_text})."
@@ -264,7 +272,7 @@ class Gateway:
                     {**base, "approval_id": approval["id"], "created": created},
                 )
                 detail = f"Approver role: {approval['approver_role']}. {summary}"
-                return Decision("fulfill", status=202, body=page("Held for approval", message, detail), connector=connector, action=action, payload=payload, fields=fields, approval_id=approval["id"])
+                return Decision("fulfill", status=202, body=page("Held for approval", message, detail, tone="hold"), connector=connector, action=action, payload=payload, fields=fields, approval_id=approval["id"])
 
         return Decision("send", connector=connector, action=action, payload=payload, fields=fields, idem_key=idem_key, approval_id=approval_id)
 
@@ -275,29 +283,29 @@ class Gateway:
             if row["id"] in self._in_flight:  # e.g. a double-click: never reconcile a request still in flight
                 message = "An identical submission is being sent right now. Not submitting it twice."
                 self._event(PolicyEvent(type="duplicate_prevented", intent_id=row["id"], message=message), "duplicate_prevented", {"idem_key": idem_key, "intent_id": row["id"], "in_flight": True})
-                return Decision("fulfill", status=409, body=page("Duplicate prevented", message), connector=connector, action=action, payload=payload)
+                return Decision("fulfill", status=409, body=page("Duplicate prevented", message, tone="info"), connector=connector, action=action, payload=payload)
             if status in ("pending", "unknown"):
                 status = self._reconcile_row(row, http_status=row["http_status"])
             if status == "committed":
                 ref = intents.get(self.conn, row["id"])["record_ref"] or "see earlier step"
                 message = f"Already done in this task ({ref}). Not submitting again."
                 self._event(PolicyEvent(type="duplicate_prevented", intent_id=row["id"], message=message), "duplicate_prevented", {"idem_key": idem_key, "intent_id": row["id"]})
-                return Decision("fulfill", status=409, body=page("Duplicate prevented", message), connector=connector, action=action, payload=payload)
+                return Decision("fulfill", status=409, body=page("Duplicate prevented", message, tone="info"), connector=connector, action=action, payload=payload)
             if status in ("pending", "unknown"):
                 message = "The outcome of an earlier attempt is still unknown and could not be checked. Not submitting again; try later."
                 self._event(PolicyEvent(type="duplicate_prevented", intent_id=row["id"], status="unknown", message=message), "duplicate_prevented", {"idem_key": idem_key, "intent_id": row["id"]})
-                return Decision("fulfill", status=409, body=page("Duplicate prevented", message), connector=connector, action=action, payload=payload)
+                return Decision("fulfill", status=409, body=page("Duplicate prevented", message, tone="info"), connector=connector, action=action, payload=payload)
         # Deterministic backstop (D7): the record may exist already, e.g. posted earlier by a person.
         found = self.lookup.check(connector, action, payload)
         if found.exists:
             ref = f" ({found.record_ref})" if found.record_ref else ""
             message = f"A record with the same {keys} already exists{ref}. Not posting a duplicate."
             self._event(PolicyEvent(type="duplicate_prevented", message=message), "duplicate_prevented", {"idem_key": idem_key, "existing": found.record_ref})
-            return Decision("fulfill", status=409, body=page("Duplicate prevented", message), connector=connector, action=action, payload=payload)
+            return Decision("fulfill", status=409, body=page("Duplicate prevented", message, tone="info"), connector=connector, action=action, payload=payload)
         if found.exists is None:
             message = f"Could not check {connector.name} for an existing record ({found.error}). Not submitting; try again shortly."
             self._event(PolicyEvent(type="denied", rule_ids=["precheck_unavailable"], message=message), "precheck_unavailable", {"idem_key": idem_key})
-            return Decision("fulfill", status=503, body=page("Not submitted", message), connector=connector, action=action, payload=payload)
+            return Decision("fulfill", status=503, body=page("Not submitted", message, tone="info"), connector=connector, action=action, payload=payload)
         return None
 
     # --- 10-11: send, observe, reconcile ---------------------------------------------------------
@@ -338,7 +346,7 @@ class Gateway:
                 response = route.fetch(max_redirects=0, timeout=15_000)
             except Exception as exc:  # timeout / connection reset: the outcome is unknown
                 message = self.resolve_unknown(intent_id, connector, action, decision.payload, None, f"{type(exc).__name__}: {exc}", decision.approval_id)
-                route.fulfill(status=504, content_type="text/html; charset=utf-8", body=page("No response", message))
+                route.fulfill(status=504, content_type="text/html; charset=utf-8", body=page("No response", message, tone="info"))
                 return
             self.record_outcome(intent_id, connector, action, decision.payload, response.status, response.headers.get("location", ""), decision.approval_id)
         finally:

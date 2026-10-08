@@ -96,3 +96,14 @@ def test_secrets_are_redacted():
     clean = secrets.redact_observation(obs)
     assert "s3cret-pass" not in clean.summary and "key-12345" not in clean.content
     assert "karya.agent" in clean.content  # usernames are not secret
+
+
+def test_audit_log_is_append_only(conn):
+    import sqlite3
+
+    db.audit(conn, "gateway", "policy_denied", {"rule_ids": ["AP-002"]}, "T-0001")
+    with pytest.raises(sqlite3.IntegrityError, match="append-only"):
+        conn.execute("UPDATE audit SET event = 'nothing to see'")
+    with pytest.raises(sqlite3.IntegrityError, match="append-only"):
+        conn.execute("DELETE FROM audit")
+    assert conn.execute("SELECT event FROM audit").fetchone()["event"] == "policy_denied"

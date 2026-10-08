@@ -355,3 +355,37 @@ real-model checks could not be run here. Instead:
 - The agent's context now carries the whole best-matching SOP (each is < 1k tokens) plus the other top chunks,
   so a model cannot skip a procedure step it never saw; `memory_search` still returns ranked chunks (D11 note).
 - `browser_select` also accepts an option's value (models sometimes pass `V001` instead of the vendor name).
+
+## Phase 12 — Docs and demo
+
+Done:
+- `README.md` with the 14 sections in the order of plan §15.1, three evidence screenshots in `docs/images/` (taken by
+  scripted runs against the live sandbox: the posted invoice, the gateway's approval hold, the AP-002 denial), the
+  criteria table, the scenario table, the decisions summary, the current eval table with an explicit note that the
+  model-driven scenarios have not been run yet, and a walkthrough with `file:function` references.
+- `ARCHITECTURE.md` (plan §15.2): components, one task end to end, the 12-step gateway pipeline, task/intent/approval
+  state machines, resume and crash safety, memory layers and order of authority, threats → mitigations, reliability
+  mechanisms, extension points, path to production.
+- `DECISIONS.md`: D1–D17 from the plan and D18–D23 made while building, each with alternatives, why, trade-off and what
+  would change my mind.
+- `DEMO.md`: the §16 video script with every command, expected ids and what to point at.
+- The gateway's own pages (held / blocked / duplicate) are now styled cards, since they appear in screenshots and the demo.
+- Added `tests/test_ledger_memory_security.py::test_audit_log_is_append_only` (the triggers were only checked by hand in
+  phase 0). Full suite: 152 passed, 1 skipped (the real-API smoke test, no key).
+
+Not done here (needs the author): recording the video, and the real-model eval run whose numbers go in the README.
+
+## Open questions / author to-do before submission
+
+1. Put a key in `.env`, then `karya config llm` (one tiny call) and the happy path from the README quick start.
+2. `karya evals run --chaos off --runs 1`, then
+   `karya evals run --scenarios ap-happy,ap-approval-approve,ap-duplicate,ap-injection,hr-onboard --chaos heavy --runs 2`
+   (the plan's recommended minimum). Paste the summary of `evals/results/latest.md` into README "Reliability results",
+   replace the "Read this honestly" note with one sentence on the model used, and name the model in README section 12.
+   Commit `evals/results/latest.md`.
+3. If a model-driven scenario fails, the per-scenario notes name the first failing check; `karya show <T-id> --trace`
+   shows why. Prompt changes live in `karya/prompts/`, procedures in `company/handbook/`.
+4. Rehearse and record the video from `DEMO.md` with `KARYA_HEADLESS=0`; add the link to README "Demo video".
+5. Merge `claude/pensive-wright-agon4r` into `main` (the plan asked for `main`; this build used the session branch).
+   The phase 9 commit (`bb69d57`) touches nothing under `karya/` and keeps that property in a merge commit (a squash merge
+   would fold it into one commit; avoid squashing so `git show --stat` still proves it).
