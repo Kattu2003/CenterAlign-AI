@@ -120,3 +120,11 @@ def list_episodes(conn: sqlite3.Connection) -> list[Episode]:
 
 def as_dict(fact: Fact) -> dict[str, Any]:
     return {"id": fact.id, "statement": fact.statement, "provenance": fact.provenance(), "entities": fact.entities}
+
+
+def clear_episodes(conn: sqlite3.Connection, by: str = "evals") -> int:
+    """Used by the eval harness (`memory: clear`): past episodes would otherwise leak answers
+    into scenarios that test asking (an episode is a summary, not an audit record)."""
+    count = conn.execute("DELETE FROM episodes").rowcount
+    audit(conn, "system", "episodes_cleared", {"count": count, "by": by})
+    return count

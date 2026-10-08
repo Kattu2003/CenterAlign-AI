@@ -1,0 +1,104 @@
+# A scripted mini-suite that exercises the eval harness itself (reset, memory, auto-responder,
+# ground-truth checks, results files) without a real model.
+
+- id: scripted-happy
+  request: "Find the latest invoice from Acme Industries in the AP mailbox, enter it into the ERP, and tell me when it's done."
+  setup: {reset: true, memory: clear}
+  human: {answers: [], approvals: none}
+  timeout_s: 120
+  scripted:
+    goal:
+      goal_spec:
+        objective: "Post the latest Acme Industries invoice."
+        deliverable: "ERP reference."
+        success_criteria:
+          - {id: c1, description: "ERP has exactly one AI/2026/0917 with the PDF values.", verification: "erp api find_invoice"}
+          - {id: c2, description: "The email is labelled Processed.", verification: "mail api get_message"}
+      plan: [{description: "Find, extract, post, label"}]
+    forced:
+      submit_invoice: {vendor_legal_name: "Acme Industries Pvt Ltd", vendor_gstin: null, invoice_number: "AI/2026/0917", invoice_date: "{D-3:%d/%m/%Y}", due_date: "{D+27:%d/%m/%Y}", po_number: "4471", subtotal: "Rs. 35,915.25", tax_total: "Rs. 6,464.75", total: "Rs. 42,380.00", suspicious_text: []}
+    steps:
+      - {tool: browser_login, args: {connector_id: mail}}
+      - {tool: browser_open, args: {url: "{connector:mail}/messages/2"}}
+      - {tool: browser_click, args: {ref: {find: link, label: AI-2026-0917.pdf}}}
+      - {tool: files_extract, args: {path: downloads/AI-2026-0917.pdf, schema: invoice}}
+      - {tool: browser_login, args: {connector_id: erp}}
+      - {tool: browser_open, args: {url: "{connector:erp}/invoices/new"}}
+      - {tool: browser_select, args: {ref: {find: select, name: vendor_id}, option_label: "Acme Industries Pvt Ltd"}}
+      - {tool: browser_fill, args: {ref: {find: textbox, name: invoice_number}, value: "AI/2026/0917"}}
+      - {tool: browser_fill, args: {ref: {find: date, name: invoice_date}, value: "{D-3}"}}
+      - {tool: browser_fill, args: {ref: {find: date, name: due_date}, value: "{D+27}"}}
+      - {tool: browser_fill, args: {ref: {find: number, name: amount}, value: "42380.00"}}
+      - {tool: browser_click, args: {ref: {find: submit}}}
+      - {tool: browser_open, args: {url: "{connector:mail}/messages/2"}}
+      - {tool: browser_select, args: {ref: {find: select, name: label}, option_label: Processed}}
+      - {tool: browser_click, args: {ref: {find: submit}}}
+      - {tool: finish, args: {status: completed, summary: "Posted AI/2026/0917 and labelled the email."}}
+  expect:
+    status: [succeeded]
+    checks:
+      - {type: erp_invoice_count, vendor_id: V001, invoice_number: AI/2026/0917, equals: 1}
+      - {type: erp_invoice_fields, vendor_id: V001, invoice_number: AI/2026/0917, amount: "42380.00", invoice_date: "{D-3}", due_date: "{D+27}"}
+      - {type: mail_has_label, message_key: M2, label: Processed}
+      - {type: questions_asked, equals: 0}
+
+- id: scripted-approval
+  request: "Process the Vertex Semiconductors invoice in the AP mailbox."
+  setup: {reset: true, memory: clear}
+  human: {answers: [], approvals: approve, approval_note: "OK"}
+  timeout_s: 120
+  scripted:
+    goal:
+      goal_spec:
+        objective: "Post VS-55120 after approval."
+        deliverable: "ERP reference."
+        success_criteria:
+          - {id: c1, description: "ERP has exactly one VS-55120.", verification: "erp api find_invoice"}
+      plan: [{description: "Post, wait for approval, post again"}]
+    steps:
+      - {tool: browser_login, args: {connector_id: erp}}
+      - {tool: browser_open, args: {url: "{connector:erp}/invoices/new"}}
+      - {tool: browser_select, args: {ref: {find: select, name: vendor_id}, option_label: "Vertex Semiconductors Ltd"}}
+      - {tool: browser_fill, args: {ref: {find: textbox, name: invoice_number}, value: "VS-55120"}}
+      - {tool: browser_fill, args: {ref: {find: date, name: invoice_date}, value: "{D-4}"}}
+      - {tool: browser_fill, args: {ref: {find: date, name: due_date}, value: "{D+41}"}}
+      - {tool: browser_fill, args: {ref: {find: number, name: amount}, value: "184500.00"}}
+      - {tool: browser_click, args: {ref: {find: submit}}}
+      # held for approval here; the harness approves as the finance_manager and the task resumes
+      - {tool: browser_login, args: {connector_id: erp}}
+      - {tool: browser_open, args: {url: "{connector:erp}/invoices/new"}}
+      - {tool: browser_select, args: {ref: {find: select, name: vendor_id}, option_label: "Vertex Semiconductors Ltd"}}
+      - {tool: browser_fill, args: {ref: {find: textbox, name: invoice_number}, value: "VS-55120"}}
+      - {tool: browser_fill, args: {ref: {find: date, name: invoice_date}, value: "{D-4}"}}
+      - {tool: browser_fill, args: {ref: {find: date, name: due_date}, value: "{D+41}"}}
+      - {tool: browser_fill, args: {ref: {find: number, name: amount}, value: "184500.00"}}
+      - {tool: browser_click, args: {ref: {find: submit}}}
+      - {tool: finish, args: {status: completed, summary: "Posted VS-55120 after approval."}}
+  expect:
+    status: [succeeded]
+    checks:
+      - {type: erp_invoice_count, vendor_id: V003, invoice_number: VS-55120, equals: 1}
+      - {type: approval_status, status: consumed}
+
+- id: scripted-question
+  request: "Enter the pending Acme invoice into the ERP."
+  setup: {reset: true, memory: clear}
+  human:
+    answers: [{match: "acme", answer: "Acme Industries, the components supplier.", by: "Arjun Rao", remember: false}]
+    approvals: none
+  timeout_s: 60
+  scripted:
+    goal:
+      goal_spec:
+        objective: "Find out which Acme is meant."
+        deliverable: "An answer."
+        success_criteria:
+          - {id: c1, description: "The requester said which Acme.", verification: "report"}
+      plan: [{description: "Ask"}]
+    steps:
+      - {tool: ask_human, args: {question: "Which Acme did you mean?", options: ["Acme Industries Pvt Ltd", "Acme Logistics LLP"]}}
+      - {tool: finish, args: {status: escalated, summary: "Stopping after the answer (test)."}}
+  expect:
+    status: [escalated]
+    checks:
+      - {type: questions_asked, equals: 1}

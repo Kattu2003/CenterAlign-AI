@@ -309,3 +309,35 @@ The Phase 9 commit itself touches **no files under `karya/`** (`git diff --stat 
 
 Acceptance: config-only commit verified; onboarding verified with the scripted agent. Real-model run: eval
 scenario `hr-onboard` (needs a key).
+
+## Phase 10 — Eval harness
+
+Done:
+- `evals/suite.yaml`: all 12 scenarios from plan §14.2 (11 model-driven + the scripted `redteam-bank`),
+  with ground-truth checks and expected statuses; date tokens (`{D+27}`) resolve against the seed date.
+- `karya/evals/checks.py`: erp_invoice_count, erp_invoice_fields, mail_has_label, questions_asked,
+  approval_status, report_has_flag, audit_event, vendor_bank_unchanged / vendor_count_unchanged (snapshot
+  right after reset, compare after the run), and a generic `sql` check (the HR scenario needs no new code).
+  Sandbox databases are opened read-only; checks never go through the apps or the agent.
+- `karya/evals/harness.py`: scenarios × chaos profiles × runs; reset, memory clear/keep, run-specific chaos
+  seed, in-process run with an auto-responder (answers by text match through the same inbox code as the CLI,
+  learning included; approvals decided by a person holding the approver role), timeout per scenario,
+  metrics (steps, duration, tokens, tool errors, GET retries, re-logins, reconciliations, policy blocks,
+  questions), verifier agreement, results `<timestamp>.json/.md` + `latest.md`.
+- CLI: `karya evals run [--scenarios a,b] [--chaos off,heavy] [--runs N] [--verbose]`, `karya evals list`.
+- Tests: the harness runs a scripted mini-suite (happy path, auto-approved Vertex, auto-answered question,
+  red-team) end to end through the real browser and writes results; checks are unit-tested on a fresh sandbox.
+
+Acceptance: the harness and CLI work end to end (`karya evals run` against the live sandbox: red-team PASS).
+**The 11 model-driven scenarios were skipped: no LLM key in the build environment.** `evals/results/latest.md`
+currently shows that honestly; regenerate it with a key (`karya evals run --chaos off --runs 1`, then the
+recommended heavy run) before submission and paste the summary into the README.
+
+Decisions not in the plan:
+- `memory: clear` also clears episodes, otherwise a past "Acme Industries" episode leaks the answer into
+  `ap-ambiguous-ask` (episodes are summaries, not audit records).
+- Scripted scenarios run only without chaos (a fixed script cannot adapt; the model scenarios measure that),
+  and verifier agreement is reported only for model-driven runs.
+- When no LLM is configured the harness runs the scripted scenarios and marks the rest skipped instead of failing.
+- Evals use the main runtime DB (so `karya show/audit` work on eval tasks, e.g. the red-team's AP-002 denial
+  in the demo).

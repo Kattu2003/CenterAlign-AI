@@ -630,9 +630,70 @@ def memory_forget(fact_id: str, by: str = typer.Option("cli", "--by", help="Who 
 
 
 @evals_app.command("run")
-def evals_run() -> None:
-    """Run the evaluation suite."""
-    _todo(10)
+def evals_run(
+    scenarios: Optional[str] = typer.Option(None, help="Comma-separated scenario ids (default: all)"),
+    chaos: str = typer.Option("off", help="Comma-separated chaos profiles, e.g. off,heavy"),
+    runs: int = typer.Option(1, help="Runs per scenario and profile"),
+    suite: str = typer.Option("evals/suite.yaml", help="Suite file"),
+    out: str = typer.Option("evals/results", help="Results folder"),
+    verbose: bool = typer.Option(False, "--verbose", help="Stream every step"),
+) -> None:
+    """Run the evaluation suite against the sandbox (apps must be up) and write a results table."""
+    from karya import db
+    from karya.cli_display import StepPrinter
+    from karya.company import load_company
+    from karya.config import get_settings, resolve_path
+    from karya.evals.harness import Harness, SandboxEnvironment, load_suite
+    from karya.llm.base import LLMConfigError
+    from karya.llm.factory import build_llm
+    from karya.runtime import ledger
+
+    settings = get_settings()
+    all_scenarios = load_suite(resolve_path(suite))
+    wanted = [x.strip() for x in scenarios.split(",")] if scenarios else [s.id for s in all_scenarios]
+    unknown = sorted(set(wanted) - {s.id for s in all_scenarios})
+    if unknown:
+        console.print(f"[red]Unknown scenarios: {unknown}[/red]")
+        raise typer.Exit(code=2)
+    selected = [s for s in all_scenarios if s.id in wanted]
+    try:
+        llm = build_llm(settings)
+    except LLMConfigError as exc:
+        llm = None
+        console.print(f"[yellow]No LLM configured ({exc}); only scripted scenarios will run.[/yellow]")
+    if verbose:
+        ledger.subscribe(StepPrinter(console, show_task=True))
+    harness = Harness(settings, load_company(settings.company_dir), db.connect(settings.db_path), llm, SandboxEnvironment(), resolve_path(out), progress=console.print)
+    try:
+        data = harness.run(selected, [c.strip() for c in chaos.split(",") if c.strip()], runs)
+    except RuntimeError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1) from exc
+    table = Table(title=f"Eval summary · {data['model']}")
+    for column in ("Chaos", "Runs", "Passed", "Pass rate", "Verifier agreement", "Median steps", "Median tokens", "Skipped"):
+        table.add_column(column)
+    for row in data["summary"]:
+        rate = "—" if row["pass_rate"] is None else f"{row['pass_rate'] * 100:.0f}%"
+        agreement = "—" if row["verifier_agreement"] is None else f"{row['verifier_agreement'] * 100:.0f}%"
+        table.add_row(row["chaos"], str(row["runs"]), str(row["passed"]), rate, agreement, f"{row['median_steps']:.0f}", f"{row['median_tokens'] / 1000:.0f}k", str(row["skipped"]))
+    console.print(table)
+    for path in data["files"]:
+        console.print(f"wrote {path}")
+
+
+@evals_app.command("list")
+def evals_list(suite: str = typer.Option("evals/suite.yaml", help="Suite file")) -> None:
+    """List the scenarios in the suite."""
+    from karya.config import resolve_path
+    from karya.evals.harness import load_suite
+
+    table = Table(title="Eval scenarios")
+    for column in ("Scenario", "Kind", "Human script", "Expected status", "Checks", "Request"):
+        table.add_column(column)
+    for sc in load_suite(resolve_path(suite)):
+        human = sc.human.get("approvals", "none") if sc.human.get("approvals", "none") != "none" else ("answers" if sc.human.get("answers") else "—")
+        table.add_row(sc.id, "scripted" if sc.scripted else "model", human, ", ".join(sc.expect.get("status", [])), str(len(sc.expect.get("checks", []))), sc.request[:60])
+    console.print(table)
 
 
 if __name__ == "__main__":
