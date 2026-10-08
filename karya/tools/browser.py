@@ -362,9 +362,12 @@ class BrowserSelect(Tool):
         locator = browser.locate(args.ref)
         if locator is None:
             return browser.stale(args.ref)
-        options: list[str] = locator.evaluate("el => el.options ? Array.from(el.options).map(o => o.text.trim()) : []")
+        pairs: list[list[str]] = locator.evaluate("el => el.options ? Array.from(el.options).map(o => [o.text.trim(), o.value]) : []")
+        options = [label for label, _ in pairs]
         wanted = args.option_label.strip()
         match = next((o for o in options if o == wanted), None) or next((o for o in options if o.casefold() == wanted.casefold()), None)
+        if match is None:  # models sometimes pass the option's value (e.g. V001) instead of its label
+            match = next((label for label, value in pairs if value and value.casefold() == wanted.casefold()), None)
         if match is None:
             return Observation(ok=False, summary=f"no option {wanted!r} in {args.ref}", error=f"Options are: {options}")
         try:

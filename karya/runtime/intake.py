@@ -39,7 +39,7 @@ def problems(goal: GoalSpec, company: Company) -> list[str]:
 
 
 def run(llm: LLMClient, company: Company, retriever: Retriever, request: str, requester: str) -> tuple[GoalSpec, list[PlanStep], Usage, Retrieved]:
-    retrieved = retriever.retrieve(request, k_handbook=4, k_facts=3, k_episodes=2)
+    retrieved = retriever.retrieve(request, k_handbook=4, k_facts=3, k_episodes=2, expand=True)
     p = company.profile
     system = render(load_prompt("intake"), company_name=p.name, today=company_today(company), timezone=p.timezone)
     user = f"=== COMPANY CONTEXT ===\n{company_context(company, retrieved)}\n\n=== REQUEST from {requester} ===\n{request}"

@@ -219,7 +219,7 @@ def build(state: TaskState, company: Company, retriever: Retriever, settings: Se
     key = (state.plan_version, state.step_count // 10)
     refreshed = cache.key != key
     if refreshed:
-        cache.retrieved = retriever.retrieve(_retrieval_query(state), k_handbook=4, k_facts=3, k_episodes=2)
+        cache.retrieved = retriever.retrieve(_retrieval_query(state), k_handbook=4, k_facts=3, k_episodes=2, expand=True)
         cache.text = company_context(company, cache.retrieved)
         cache.key = key
     system = system_prompt(company) + "\n\n=== COMPANY CONTEXT ===\n" + cache.text

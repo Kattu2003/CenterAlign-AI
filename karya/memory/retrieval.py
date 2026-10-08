@@ -90,5 +90,17 @@ class Retriever:
             for i, s in _rank(tokenize(query), docs, k=k)
         ]
 
-    def retrieve(self, query: str, k_handbook: int = 4, k_facts: int = 3, k_episodes: int = 2) -> Retrieved:
-        return Retrieved(self.handbook(query, k_handbook), self.facts(query, k_facts), self.episodes(query, k_episodes))
+    def expand_primary(self, hits: list[Hit]) -> list[Hit]:
+        """The whole best-matching procedure, then the other top chunks. A model that sees
+        only fragments of an SOP can skip a step (e.g. "label the email Processed")."""
+        if not hits:
+            return hits
+        primary = self._chunks[next(i for i, c in enumerate(self._chunks) if c.id == hits[0].id)].doc_id
+        full = [Hit("handbook", c.id, f"{c.doc_title} — {c.heading}", c.text, hits[0].score) for c in self._chunks if c.doc_id == primary]
+        return full + [h for h in hits if not h.id.startswith(primary + "#")]
+
+    def retrieve(self, query: str, k_handbook: int = 4, k_facts: int = 3, k_episodes: int = 2, expand: bool = False) -> Retrieved:
+        handbook = self.handbook(query, k_handbook)
+        if expand:
+            handbook = self.expand_primary(handbook)
+        return Retrieved(handbook, self.facts(query, k_facts), self.episodes(query, k_episodes))

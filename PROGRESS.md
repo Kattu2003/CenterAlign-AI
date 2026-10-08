@@ -341,3 +341,17 @@ Decisions not in the plan:
 - When no LLM is configured the harness runs the scripted scenarios and marks the rest skipped instead of failing.
 - Evals use the main runtime DB (so `karya show/audit` work on eval tasks, e.g. the red-team's AP-002 denial
   in the demo).
+
+## Hardening for real models (between phases 10 and 12)
+
+Phase 11 (P2 extras) was deliberately **skipped**: the plan allows P2 only when every P0/P1 check passes, and the
+real-model checks could not be run here. Instead:
+- Provider clients tested against fake SDK objects (`tests/test_llm_clients.py`): OpenAI/Azure/Anthropic request
+  formatting (tools, forced tool choice, one tool per step, Anthropic prompt caching), response parsing, invalid
+  JSON arguments, the `parallel_tool_calls` fallback, rate-limit retries, structured-output validation retry, and
+  that every tool schema is inlined/portable. `tests/test_llm_smoke.py` hits the real API when a key is set.
+- Prompt budget measured (`tests/test_context_budget.py`): ~4k tokens per step at most on the happy path
+  (target < 30k), so a 25-step task is roughly 100k input tokens.
+- The agent's context now carries the whole best-matching SOP (each is < 1k tokens) plus the other top chunks,
+  so a model cannot skip a procedure step it never saw; `memory_search` still returns ranked chunks (D11 note).
+- `browser_select` also accepts an option's value (models sometimes pass `V001` instead of the vendor name).
