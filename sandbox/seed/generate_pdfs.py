@@ -280,3 +280,67 @@ def generate_all(data: dict, base: date, out_dir: Path) -> list[Path]:
             raise RuntimeError(f"{path.name}: text extraction is missing {missing}")
         paths.append(path)
     return paths
+
+
+# --- offer letters (phase 9: HR onboarding) ----------------------------------------------------
+
+FULL_MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
+
+
+def long_date(d: date) -> str:
+    return f"{d.day} {FULL_MONTHS[d.month - 1]} {d.year}"
+
+
+def render_offer_letter(offer: dict, company: dict, base: date, out_dir: Path) -> Path:
+    """An employment offer letter, as HR would put in the shared drive."""
+    out_dir.mkdir(parents=True, exist_ok=True)
+    path = out_dir / offer["file"]
+    s = _styles()
+    first = offer["candidate_name"].split()[0]
+    start = long_date(resolve(offer["start_date"], base))
+    story = [
+        Paragraph(company["name"], s["vendor"]),
+        Paragraph(company["address"], s["small"]),
+        Spacer(1, 8 * mm),
+        Paragraph(f"Date: {long_date(resolve(offer['issued'], base))}", s["normal"]),
+        Spacer(1, 4 * mm),
+        Paragraph("<b>Private &amp; Confidential</b>", s["normal"]),
+        Paragraph(f"{offer['salutation']} {offer['candidate_name']}", s["normal"]),
+        Paragraph(offer["address"], s["normal"]),
+        Spacer(1, 6 * mm),
+        Paragraph(f"<b>Subject: Offer of employment — {offer['title']}</b>", s["normal"]),
+        Spacer(1, 4 * mm),
+        Paragraph(f"Dear {first},", s["normal"]),
+        Spacer(1, 2 * mm),
+        Paragraph(
+            f"We are delighted to offer you the position of <b>{offer['title']}</b> in the <b>{offer['department']}</b> "
+            f"department at {company['name']}, on the terms below.", s["normal"]),
+        Spacer(1, 4 * mm),
+        Table(
+            [
+                ["Position", offer["title"]],
+                ["Department", offer["department"]],
+                ["Start date", start],
+                ["Reporting manager", f"{offer['manager_name']}, {offer['manager_title']}"],
+                ["Location", offer["location"]],
+                ["Annual CTC", offer["ctc"]],
+            ],
+            colWidths=[45 * mm, 110 * mm],
+            hAlign="LEFT",
+            style=TableStyle([("FONTSIZE", (0, 0), (-1, -1), 10), ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"), ("BOTTOMPADDING", (0, 0), (-1, -1), 4)]),
+        ),
+        Spacer(1, 4 * mm),
+        Paragraph("Your work email will be created by HR and shared with you before your first day, together with your system access and equipment.", s["normal"]),
+        Spacer(1, 2 * mm),
+        Paragraph("Please sign and return a copy of this letter to confirm your acceptance.", s["normal"]),
+        Spacer(1, 10 * mm),
+        Paragraph("Sincerely,", s["normal"]),
+        Paragraph(offer["signatory"]["name"], s["normal"]),
+        Paragraph(f"{offer['signatory']['title']}, {company['name']}", s["normal"]),
+    ]
+    SimpleDocTemplate(str(path), pagesize=A4, leftMargin=20 * mm, rightMargin=20 * mm, topMargin=18 * mm, bottomMargin=18 * mm, title=f"Offer — {offer['candidate_name']}").build(story)
+    text = extract_text(path)
+    for expected in (offer["candidate_name"], offer["title"], start, offer["manager_name"]):
+        if expected not in text:
+            raise RuntimeError(f"{path.name}: text extraction is missing {expected!r}")
+    return path

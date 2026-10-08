@@ -242,3 +242,47 @@ def test_mail_inbox_message_download_and_label(mail):
     assert len(unlabelled) == 7  # M1 was processed at seed time, M2 just now
     bad = mail.post("/messages/2/labels", data={"label": "Paid", "csrf_token": csrf_from(message.text)})
     assert bad.status_code == 400
+
+
+@pytest.fixture()
+def hr(base_date):
+    from sandbox.hr.app import app, chaos
+
+    seed.seed_hr(seed.load_data(), base_date)
+    chaos.reset()
+    with TestClient(app, base_url="http://127.0.0.1:8103", follow_redirects=False) as client:
+        yield client
+    chaos.reset()
+
+
+def test_hr_create_employee_access_and_equipment(hr):
+    login(hr, "hr")
+    assert "Rohan Mehta" in hr.get("/employees", params={"q": "rohan"}).text
+    page = hr.get("/employees/new")
+    data = {"full_name": "Priya Sharma", "work_email": "Priya.Sharma@meridian.example", "department": "Data & Analytics", "title": "Data Analyst", "start_date": "2026-10-20", "manager_id": "E014", "csrf_token": csrf_from(page.text)}
+    created = hr.post("/employees", data=data)
+    assert created.status_code == 303 and created.headers["location"] == "/employees/E015?created=1"
+    detail = hr.get("/employees/E015?created=1")
+    assert "Employee created — E015" in detail.text
+    token = csrf_from(detail.text)
+    assert hr.post("/employees/E015/access-requests", data={"system": "erp", "level": "viewer", "justification": "default", "csrf_token": token}).status_code == 303
+    assert hr.post("/employees/E015/equipment", data={"item": "standard_laptop", "notes": "", "csrf_token": token}).status_code == 303
+    duplicate = hr.post("/employees", data=data)
+    assert duplicate.status_code == 400 and "already exists (E015)" in duplicate.text
+    headers = {"X-API-Key": settings.api_key("hr")}
+    employee = hr.get("/api/employees", params={"q": "priya.sharma@meridian.example"}, headers=headers).json()
+    assert len(employee) == 1 and employee[0]["work_email"] == "priya.sharma@meridian.example" and employee[0]["manager_name"] == "Rohan Mehta"
+    access = hr.get("/api/access-requests", params={"employee_id": "E015"}, headers=headers).json()
+    assert [(a["system"], a["level"]) for a in access] == [("erp", "viewer")]
+    assert hr.get("/api/equipment-requests", params={"employee_id": "E015"}, headers=headers).json()[0]["item"] == "standard_laptop"
+    assert hr.get("/api/employees").status_code == 401
+
+
+def test_offer_letter_in_shared_drive(base_date):
+    from datetime import timedelta
+
+    path = settings.shared_drive_dir() / "hr" / "offers" / "Offer_Priya_Sharma.pdf"
+    text = extract_text(path)
+    start = base_date + timedelta(days=12)
+    assert "Priya Sharma" in text and "Data Analyst" in text and "Rohan Mehta" in text
+    assert f"{start.day} {start.strftime('%B')} {start.year}" in text

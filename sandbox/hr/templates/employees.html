@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Employees — Meridian People{% endblock %}
+{% block content %}
+{% set d = drift(request) %}
+<h1>Employee directory</h1>
+<form method="get" action="/employees" class="searchbar">
+  <div>
+    <label for="{{ d.id('q') }}">Search employees</label>
+    <input id="{{ d.id('q') }}" name="q" type="search" value="{{ q }}" placeholder="Name, email or ID">
+  </div>
+  <button type="submit">{{ d.button('Search') }}</button>
+</form>
+<table class="grid">
+  <caption>Employees ({{ employees|length }})</caption>
+  <thead><tr><th>ID</th><th>Name</th><th>Work email</th><th>Department</th><th>Title</th><th>Manager</th><th>Start date</th><th>Status</th></tr></thead>
+  <tbody>
+  {% for e in employees %}
+    <tr>
+      <td><a href="/employees/{{ e.id }}">{{ e.id }}</a></td>
+      <td>{{ e.full_name }}</td><td>{{ e.work_email }}</td><td>{{ e.department }}</td><td>{{ e.title }}</td>
+      <td>{{ e.manager_name or '—' }}</td><td>{{ e.start_date }}</td><td>{{ e.status }}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="8" class="muted">No employees match.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+<p><a href="/employees/new">New employee</a></p>
+{% endblock %}

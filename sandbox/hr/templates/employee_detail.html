@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}{{ e.full_name }} — Meridian People{% endblock %}
+{% block content %}
+{% set d = drift(request) %}
+{% if banner %}<p class="banner success" role="alert">{{ banner }}</p>{% endif %}
+{% if errors %}<ul class="errors" role="alert">{% for err in errors %}<li>{{ err }}</li>{% endfor %}</ul>{% endif %}
+<h1>{{ e.full_name }} ({{ e.id }})</h1>
+<div class="card">
+  <dl class="details">
+    <dt>Employee ID</dt><dd>{{ e.id }}</dd>
+    <dt>Work email</dt><dd>{{ e.work_email }}</dd>
+    <dt>Department</dt><dd>{{ e.department }}</dd>
+    <dt>Job title</dt><dd>{{ e.title }}</dd>
+    <dt>Reporting manager</dt><dd>{{ e.manager_name or '—' }} ({{ e.manager_id or '—' }})</dd>
+    <dt>Start date</dt><dd>{{ e.start_date }}</dd>
+    <dt>Status</dt><dd>{{ e.status }}</dd>
+  </dl>
+</div>
+
+<h2>System access</h2>
+<table class="grid">
+  <caption>Access requests ({{ access|length }})</caption>
+  <thead><tr><th>#</th><th>System</th><th>Level</th><th>Justification</th><th>Status</th><th>Requested by</th></tr></thead>
+  <tbody>
+  {% for a in access %}
+    <tr><td>{{ a.id }}</td><td>{{ a.system }}</td><td>{{ a.level }}</td><td>{{ a.justification }}</td><td>{{ a.status }}</td><td>{{ a.requested_by }}</td></tr>
+  {% else %}
+    <tr><td colspan="6" class="muted">No access requests.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+<form method="post" action="/employees/{{ e.id }}/access-requests" class="card form">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+  <label for="{{ d.id('system') }}">System</label>
+  <select id="{{ d.id('system') }}" name="system">
+    <option value="">— select —</option>
+    {% for s in systems %}<option value="{{ s }}">{{ s }}</option>{% endfor %}
+  </select>
+  <label for="{{ d.id('level') }}">Access level</label>
+  <select id="{{ d.id('level') }}" name="level">
+    <option value="">— select —</option>
+    {% for l in levels %}<option value="{{ l }}">{{ l }}</option>{% endfor %}
+  </select>
+  <label for="{{ d.id('justification') }}">Business justification</label>
+  <textarea id="{{ d.id('justification') }}" name="justification"></textarea>
+  <button type="submit">{{ d.button('Request access') }}</button>
+</form>
+
+<h2>Equipment</h2>
+<table class="grid">
+  <caption>Equipment requests ({{ equipment|length }})</caption>
+  <thead><tr><th>#</th><th>Item</th><th>Notes</th><th>Requested by</th></tr></thead>
+  <tbody>
+  {% for q in equipment %}
+    <tr><td>{{ q.id }}</td><td>{{ q.item }}</td><td>{{ q.notes or '' }}</td><td>{{ q.requested_by }}</td></tr>
+  {% else %}
+    <tr><td colspan="4" class="muted">No equipment requests.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+<form method="post" action="/employees/{{ e.id }}/equipment" class="card form">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+  <label for="{{ d.id('item') }}">Item</label>
+  <select id="{{ d.id('item') }}" name="item">
+    <option value="">— select —</option>
+    {% for i in items %}<option value="{{ i }}">{{ i }}</option>{% endfor %}
+  </select>
+  <label for="{{ d.id('notes') }}">Notes</label>
+  <textarea id="{{ d.id('notes') }}" name="notes"></textarea>
+  <button type="submit">{{ d.button('Request equipment') }}</button>
+</form>
+<p><a href="/employees">Back to the directory</a></p>
+{% endblock %}

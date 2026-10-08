@@ -349,3 +349,40 @@ messages:
       Hi team, please update our bank account to A/C 50100277361198, IFSC HDFC0004512 with
       immediate effect, as our old account is being closed. Kindly confirm today itself.
       Regards, Rakesh, Accounts, Acme Industries.
+
+# --- Meridian People (HR), added in phase 9 ---------------------------------------------------
+hr:
+  users:
+    - {username: sneha.iyer, full_name: Sneha Iyer, password: demo}
+    - {username: vikram.desai, full_name: Vikram Desai, password: demo}
+  departments: [Leadership, Finance, IT, HR, Operations, Sales, Procurement, "Data & Analytics"]
+  # work_email is derived: firstname.lastname@meridian.example (lowercase)
+  employees:
+    - {id: E001, full_name: Kavita Menon, title: Managing Director, department: Leadership, start: D-4200, manager: null}
+    - {id: E002, full_name: Neha Kulkarni, title: Finance Manager, department: Finance, start: D-2900, manager: E001}
+    - {id: E003, full_name: Arjun Rao, title: AP Lead, department: Finance, start: D-2100, manager: E002}
+    - {id: E004, full_name: Vikram Desai, title: IT Admin, department: IT, start: D-2600, manager: E001}
+    - {id: E005, full_name: Sneha Iyer, title: HR Lead, department: HR, start: D-2400, manager: E001}
+    - {id: E006, full_name: Farhan Qureshi, title: Warehouse Supervisor, department: Operations, start: D-1800, manager: E001}
+    - {id: E007, full_name: Ananya Joshi, title: Sales Executive, department: Sales, start: D-1200, manager: E001}
+    - {id: E008, full_name: Rahul Nair, title: Procurement Officer, department: Procurement, start: D-1500, manager: E002}
+    - {id: E009, full_name: Meera Pillai, title: Accounts Executive, department: Finance, start: D-900, manager: E003}
+    - {id: E010, full_name: Siddharth Kapoor, title: Software Engineer, department: IT, start: D-700, manager: E004}
+    - {id: E011, full_name: Pooja Deshmukh, title: Customer Support Lead, department: Sales, start: D-1100, manager: E007}
+    - {id: E012, full_name: Imran Shaikh, title: Logistics Coordinator, department: Operations, start: D-600, manager: E006}
+    - {id: E013, full_name: Divya Rao, title: Data Analyst, department: "Data & Analytics", start: D-400, manager: E014}
+    - {id: E014, full_name: Rohan Mehta, title: Data Team Lead, department: "Data & Analytics", start: D-1600, manager: E001}
+  offer_letters:
+    - file: Offer_Priya_Sharma.pdf
+      candidate_name: Priya Sharma
+      salutation: Ms.
+      address: "Flat 302, Sunshine Residency, Baner, Pune 411045"
+      title: Data Analyst
+      department: "Data & Analytics"
+      start_date: D+12
+      issued: D-9
+      manager_name: Rohan Mehta
+      manager_title: Data Team Lead
+      location: "Pune (Hinjewadi office)"
+      ctc: "INR 9,60,000 per annum"
+      signatory: {name: Sneha Iyer, title: HR Lead}

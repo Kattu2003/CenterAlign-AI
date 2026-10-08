@@ -64,7 +64,7 @@ import time
 
 import yaml
 
-LIVE_APPS = {"erp": "sandbox.erp.app", "mail": "sandbox.mail.app"}
+LIVE_APPS = {"erp": "sandbox.erp.app", "mail": "sandbox.mail.app", "hr": "sandbox.hr.app"}
 
 
 def _free_port() -> int:

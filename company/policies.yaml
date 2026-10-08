@@ -19,3 +19,10 @@ rules:
     description: The AI employee may not create vendors; new vendors go through procurement.
     match: {connector: erp, action: create_vendor}
     effect: deny
+  - id: HR-001
+    description: Admin-level system access requires IT Admin approval.
+    match: {connector: hr, action: request_access}
+    when:
+      - {field: level, op: eq, value: admin}
+    effect: require_approval
+    approver_role: it_admin

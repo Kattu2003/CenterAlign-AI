@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}New employee — Meridian People{% endblock %}
+{% block content %}
+{% set d = drift(request) %}
+<h1>New employee</h1>
+{% if errors %}<ul class="errors" role="alert">{% for e in errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+<form method="post" action="/employees" class="card form">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+  <label for="{{ d.id('full_name') }}">Full name</label>
+  <input id="{{ d.id('full_name') }}" name="full_name" type="text" value="{{ values.full_name or '' }}">
+  <label for="{{ d.id('work_email') }}">Work email</label>
+  <input id="{{ d.id('work_email') }}" name="work_email" type="email" value="{{ values.work_email or '' }}">
+  <label for="{{ d.id('department') }}">Department</label>
+  <select id="{{ d.id('department') }}" name="department">
+    <option value="">— select —</option>
+    {% for dep in departments %}<option value="{{ dep }}" {% if dep == values.department %}selected{% endif %}>{{ dep }}</option>{% endfor %}
+  </select>
+  <label for="{{ d.id('title') }}">Job title</label>
+  <input id="{{ d.id('title') }}" name="title" type="text" value="{{ values.title or '' }}">
+  <label for="{{ d.id('start_date') }}">Start date</label>
+  <input id="{{ d.id('start_date') }}" name="start_date" type="date" value="{{ values.start_date or '' }}">
+  <label for="{{ d.id('manager_id') }}">Reporting manager</label>
+  <select id="{{ d.id('manager_id') }}" name="manager_id">
+    <option value="">— select —</option>
+    {% for m in managers %}<option value="{{ m.id }}" {% if m.id == values.manager_id %}selected{% endif %}>{{ m.full_name }}</option>{% endfor %}
+  </select>
+  <button type="submit">{{ d.button('Create employee') }}</button>
+</form>
+{% endblock %}

@@ -35,6 +35,7 @@ class AppSpec:
 APPS: list[AppSpec] = [
     AppSpec("erp", "sandbox.erp.app:app", 8101),
     AppSpec("mail", "sandbox.mail.app:app", 8102),
+    AppSpec("hr", "sandbox.hr.app:app", 8103),
 ]
 
 

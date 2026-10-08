@@ -1,0 +1,15 @@
+{
+  "name": "offer_letter",
+  "description": "A Meridian employment offer letter.",
+  "fields": {
+    "candidate_name": {"type": "string", "description": "Full name of the candidate"},
+    "title": {"type": "string", "description": "Job title offered"},
+    "department": {"type": "string", "description": "Department"},
+    "start_date": {"type": "date", "description": "Start (joining) date"},
+    "manager_name": {"type": "string", "description": "Reporting manager's name"},
+    "location": {"type": "string", "required": false}
+  },
+  "checks": [
+    {"type": "required"}
+  ]
+}

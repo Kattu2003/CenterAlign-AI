@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — Meridian People{% endblock %}
+{% block content %}
+<h1>People dashboard</h1>
+<div class="tiles">
+  <div class="card tile"><div class="muted">Active employees</div><div class="big">{{ count }}</div><a href="/employees">Employee directory</a></div>
+  <div class="card tile"><div class="muted">Onboarding</div><div class="big">+</div><a href="/employees/new">New employee</a></div>
+</div>
+<table class="grid">
+  <caption>Upcoming joiners</caption>
+  <thead><tr><th>ID</th><th>Name</th><th>Department</th><th>Start date</th></tr></thead>
+  <tbody>
+  {% for e in joiners %}
+    <tr><td><a href="/employees/{{ e.id }}">{{ e.id }}</a></td><td>{{ e.full_name }}</td><td>{{ e.department }}</td><td>{{ e.start_date }}</td></tr>
+  {% else %}
+    <tr><td colspan="4" class="muted">No upcoming joiners.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

@@ -21,7 +21,7 @@ from sandbox.common import settings
 from sandbox.common.auth import hash_password
 from sandbox.common.dates import IST, resolve, today_ist
 from sandbox.common.money import to_paise
-from sandbox.seed.generate_pdfs import generate_all, pdf_filename
+from sandbox.seed.generate_pdfs import generate_all, pdf_filename, render_offer_letter
 
 DATA_FILE = Path(__file__).with_name("data.yaml")
 
@@ -57,6 +57,30 @@ CREATE TABLE messages (
 );
 CREATE TABLE attachments (
     id INTEGER PRIMARY KEY, message_id INTEGER NOT NULL, filename TEXT NOT NULL, path TEXT NOT NULL, content_type TEXT NOT NULL
+);
+CREATE TABLE audit (id INTEGER PRIMARY KEY, ts TEXT NOT NULL, username TEXT, action TEXT NOT NULL, details TEXT);
+"""
+
+
+HR_SCHEMA = """
+DROP TABLE IF EXISTS users;
+DROP TABLE IF EXISTS departments;
+DROP TABLE IF EXISTS employees;
+DROP TABLE IF EXISTS access_requests;
+DROP TABLE IF EXISTS equipment_requests;
+DROP TABLE IF EXISTS audit;
+CREATE TABLE users (username TEXT PRIMARY KEY, full_name TEXT NOT NULL, password_hash TEXT NOT NULL);
+CREATE TABLE departments (name TEXT PRIMARY KEY);
+CREATE TABLE employees (
+    id TEXT PRIMARY KEY, full_name TEXT NOT NULL, work_email TEXT NOT NULL, department TEXT, title TEXT,
+    start_date TEXT, manager_id TEXT, status TEXT NOT NULL DEFAULT 'active'
+);
+CREATE TABLE access_requests (
+    id INTEGER PRIMARY KEY, employee_id TEXT NOT NULL, system TEXT NOT NULL, level TEXT NOT NULL,
+    justification TEXT, status TEXT NOT NULL DEFAULT 'Requested', requested_by TEXT, created_at TEXT
+);
+CREATE TABLE equipment_requests (
+    id INTEGER PRIMARY KEY, employee_id TEXT NOT NULL, item TEXT NOT NULL, notes TEXT, requested_by TEXT, created_at TEXT
 );
 CREATE TABLE audit (id INTEGER PRIMARY KEY, ts TEXT NOT NULL, username TEXT, action TEXT NOT NULL, details TEXT);
 """
@@ -146,10 +170,32 @@ def seed_mail(data: dict, base: date, pdf_dir: Path) -> None:
         conn.close()
 
 
+def work_email(full_name: str) -> str:
+    parts = full_name.lower().split()
+    return f"{parts[0]}.{parts[-1]}@meridian.example"
+
+
+def seed_hr(data: dict, base: date) -> None:
+    hr = data["hr"]
+    conn = _connect("hr")
+    try:
+        conn.executescript(HR_SCHEMA)
+        _seed_users(conn, "hr", {"users": data["users"] + hr["users"]})
+        conn.executemany("INSERT INTO departments(name) VALUES (?)", [(d,) for d in hr["departments"]])
+        for e in hr["employees"]:
+            conn.execute(
+                "INSERT INTO employees(id, full_name, work_email, department, title, start_date, manager_id, status) VALUES (?, ?, ?, ?, ?, ?, ?, 'active')",
+                (e["id"], e["full_name"], work_email(e["full_name"]), e["department"], e["title"], resolve(e["start"], base).isoformat(), e.get("manager")),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+
 def build_shared_drive(data: dict, base: date) -> Path:
-    """Recreate the generated shared-drive content (finance reference files, empty outbox)."""
+    """Recreate the generated shared-drive content (finance reference files, HR offer letters, empty outbox)."""
     root = settings.shared_drive_dir()
-    for name in ("finance", "outbox"):
+    for name in ("finance", "outbox", "hr"):
         target = root / name
         if target.exists():
             shutil.rmtree(target)
@@ -162,6 +208,8 @@ def build_shared_drive(data: dict, base: date) -> Path:
     (root / "outbox" / "README.txt").write_text(
         "Files placed here are picked up by the finance team each evening.\n", encoding="utf-8"
     )
+    for offer in data.get("hr", {}).get("offer_letters", []):
+        render_offer_letter(offer, data["buyer"], base, root / "hr" / "offers")
     return root
 
 
@@ -184,6 +232,8 @@ def reset_app(app: str) -> str:
     elif app == "mail":
         generate_all(data, base, settings.pdf_dir())
         seed_mail(data, base, settings.pdf_dir())
+    elif app == "hr":
+        seed_hr(data, base)
     else:
         raise ValueError(f"unknown sandbox app {app!r}")
     return base.isoformat()
@@ -196,6 +246,7 @@ def reset_all() -> date:
     generate_all(data, base, settings.pdf_dir())
     seed_erp(data, base)
     seed_mail(data, base, settings.pdf_dir())
+    seed_hr(data, base)
     build_shared_drive(data, base)
     write_meta(base)
     return base

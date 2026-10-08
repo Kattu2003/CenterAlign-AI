@@ -288,3 +288,24 @@ Decisions not in the plan:
 - Detector flags are merged into the report by code, so an injection can never be left out of a summary
   (the document asked for exactly that).
 - Scripted scenarios are YAML data, so a new red-team probe needs no code.
+
+## Phase 9 — Generalization: HR onboarding via configuration only
+
+Preceded by a separate runtime commit (`runtime: remove the last company-specific defaults before phase 9`,
+DECISIONS.md D10 note) that removed Meridian-flavoured defaults from `karya/`. HR did not need it to work.
+
+The Phase 9 commit itself touches **no files under `karya/`** (`git diff --stat HEAD~1 -- karya/` is empty):
+- Sandbox: Meridian People HR app on 8103 (`sandbox/hr/`: directory, new-employee form, access and equipment
+  requests, read-only API), HR seed data (14 employees incl. Rohan Mehta E014), the offer letter
+  `shared_drive/hr/offers/Offer_Priya_Sharma.pdf` (start D+12), `sandbox/run.py` starts it.
+- Company config: `connectors/hr.yaml` (create_employee / request_access / request_equipment with idempotency
+  keys and reconcile lookups; `level` is part of the access key), handbook `hr-01-onboarding.md` and
+  `it-01-access-policy.md`, policy HR-001 (admin access needs it_admin), schema `offer_letter.json`.
+- Tests: HR app in-process tests; `tests/test_hr_onboarding.py` — a scripted agent reads the offer letter
+  (extraction + date normalization), checks the directory, creates E015 with priya.sharma@meridian.example,
+  requests erp viewer + mail viewer + standard_laptop, the erp admin request is held by HR-001, Neha Kulkarni
+  is refused (role), Vikram Desai approves, the task resumes and posts it once; the verifier's system
+  evidence re-checks the employee record (ref E015) and the approval is consumed.
+
+Acceptance: config-only commit verified; onboarding verified with the scripted agent. Real-model run: eval
+scenario `hr-onboard` (needs a key).
