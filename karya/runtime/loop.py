@@ -46,7 +46,8 @@ class RunContext:
     llm: LLMClient
     conn: sqlite3.Connection
     worker_id: str = "foreground"
-    stop: threading.Event = field(default_factory=threading.Event)
+    stop: threading.Event = field(default_factory=threading.Event)    # worker shutdown (Ctrl-C)
+    abort: threading.Event = field(default_factory=threading.Event)   # this task only (lease lost)
     hooks: dict[str, Callable[..., Any]] = field(default_factory=dict)  # e.g. "before_verify"
     lookup: ReconcileLookup | None = None
     verifier_llm: LLMClient | None = None  # defaults to llm
@@ -105,7 +106,7 @@ def run_task(task_id: str, ctx: RunContext) -> LoopResult:
 
         no_tool_replies = 0
         while True:
-            if ctx.stop.is_set():
+            if ctx.stop.is_set() or ctx.abort.is_set():
                 return LoopResult("interrupted", "queued", "worker stopping; task returned to the queue")
 
             guard = stuck.check(state, settings)

@@ -212,10 +212,34 @@ def config_llm() -> None:
 
 
 @app.command()
-def submit(request: str, requester: Optional[str] = None) -> None:
-    """Enqueue a request; prints the task id."""
-    _todo(5)
+def submit(
+    request: str = typer.Argument(..., help="The work request, in plain English"),
+    requester: Optional[str] = typer.Option(None, help="Who is asking (default: company default requester)"),
+    max_steps: Optional[int] = typer.Option(None, "--max-steps", help="Step budget for this task"),
+    at: Optional[str] = typer.Option(None, "--at", help="Run no earlier than this ISO time (e.g. 2026-10-09T09:00:00+05:30)"),
+    priority: int = typer.Option(0, help="Higher runs first"),
+) -> None:
+    """Enqueue a request for the background worker; prints the task id."""
+    from datetime import datetime
 
+    from karya import db
+    from karya.company import load_company
+    from karya.config import get_settings
+    from karya.db import to_iso
+    from karya.worker import queue
+
+    settings = get_settings()
+    company = load_company(settings.company_dir)
+    run_at = None
+    if at:
+        try:
+            run_at = to_iso(datetime.fromisoformat(at))
+        except ValueError as exc:
+            console.print(f"[red]--at must be an ISO date-time: {exc}[/red]")
+            raise typer.Exit(code=2) from exc
+    conn = db.connect(settings.db_path)
+    task_id = queue.enqueue(conn, request, requester or company.profile.default_requester, priority=priority, run_at=run_at, max_steps=max_steps)
+    console.print(task_id)
 
 def _run_context(worker_id: str):
     """Settings + company + LLM + DB for running tasks. Exits with a clear message if the LLM is not configured."""
@@ -341,16 +365,46 @@ def resume(task_id: str, wait: bool = typer.Option(True, "--wait/--no-wait")) ->
 
 
 @app.command()
-def worker(once: bool = False) -> None:
-    """Run the background worker."""
-    _todo(5)
+def worker(
+    once: bool = typer.Option(False, "--once", help="Run one task (until done or waiting) and exit"),
+    worker_id: Optional[str] = typer.Option(None, "--id", help="Worker id (default: w-<pid>)"),
+) -> None:
+    """Background worker: claim -> run -> repeat. Ctrl-C finishes the current step and releases the task."""
+    import os
 
+    from karya.cli_display import StepPrinter
+    from karya.runtime import ledger
+    from karya.worker.worker import run_worker
+
+    ctx = _run_context(worker_id or f"w-{os.getpid()}")
+    ledger.subscribe(StepPrinter(console, show_task=True))
+    console.print(f"[bold]Worker {ctx.worker_id}[/bold] started (company: {ctx.company.name}). Ctrl-C to stop.")
+    try:
+        processed = run_worker(ctx, once=once)
+    except KeyboardInterrupt:
+        console.print("[yellow]Stopped immediately (second Ctrl-C). A running task will be reclaimed after its lease expires.[/yellow]")
+        raise typer.Exit(code=130)
+    if ctx.stop.is_set():
+        console.print(f"[yellow]Worker {ctx.worker_id} stopped; {processed} task run(s). Unfinished work was returned to the queue.[/yellow]")
+    else:
+        console.print(f"Worker {ctx.worker_id} exiting; {processed} task run(s).")
 
 @app.command()
-def tasks() -> None:
+def tasks(status: Optional[str] = typer.Option(None, help="Only tasks with this status")) -> None:
     """List tasks."""
-    _todo(5)
+    from karya import db
+    from karya.config import get_settings
+    from karya.worker import queue
 
+    conn = db.connect(get_settings().db_path)
+    table = Table(title="Tasks")
+    for column in ("Task", "Status", "Steps", "Tokens", "Requester", "Created (UTC)", "Request"):
+        table.add_column(column)
+    styles = {"succeeded": "green", "failed": "red", "escalated": "magenta", "partial": "yellow", "waiting_approval": "yellow", "waiting_human": "yellow", "running": "cyan"}
+    for task in queue.list_tasks(conn, status):
+        style = styles.get(task["status"], "white")
+        table.add_row(task["id"], f"[{style}]{task['status']}[/{style}]", str(task["step_count"]), f"{(task['tokens_in'] + task['tokens_out']) // 1000}k", task["requester"], task["created_at"][:19], task["request"][:70])
+    console.print(table)
 
 @app.command()
 def show(
@@ -401,33 +455,128 @@ def show(
 
 @app.command()
 def inbox() -> None:
-    """Pending questions and approvals."""
-    _todo(5)
+    """Pending questions and approvals, together."""
+    import json
+
+    from karya import db
+    from karya.config import get_settings
+    from karya.worker import inbox as inbox_mod
+
+    conn = db.connect(get_settings().db_path)
+    questions = inbox_mod.pending_questions(conn)
+    approvals = inbox_mod.pending_approvals(conn)
+    if not questions and not approvals:
+        console.print("Inbox is empty.")
+        return
+    for q in questions:
+        options = json.loads(q["options_json"] or "[]")
+        console.print(f"[bold yellow]{q['id']}[/bold yellow] (task {q['task_id']}) {q['question']}")
+        for option in options:
+            console.print(f"    • {option}")
+        if q["context"]:
+            console.print(f"    [dim]{q['context']}[/dim]")
+        console.print(f"    answer: karya answer {q['id']} \"...\"")
+    for a in approvals:
+        rules = ", ".join(json.loads(a["rule_ids_json"]))
+        console.print(f"[bold yellow]{a['id']}[/bold yellow] (task {a['task_id']}) {a['summary']} — rule {rules}, needs role {a['approver_role']}")
+        console.print(f"    approve: karya approve {a['id']} --by \"...\"   reject: karya reject {a['id']} --by \"...\" --reason \"...\"")
+
+
+def _learner():
+    """Fact learning uses the fast model; without a configured model, answers are still recorded."""
+    from karya.llm.base import LLMConfigError
+    from karya.llm.factory import build_llm
+
+    try:
+        llm = build_llm()
+    except LLMConfigError:
+        return None
+    from functools import partial
+
+    from karya.memory import learning
+
+    return partial(learning.learn, llm=llm)
 
 
 @app.command()
-def answer(question_id: str, text: str) -> None:
-    """Answer a question."""
-    _todo(5)
+def answer(
+    question_id: str,
+    text: str,
+    by: Optional[str] = typer.Option(None, "--by", help="Who is answering (default: the task's requester)"),
+    remember: bool = typer.Option(True, "--remember/--no-remember", help="Learn a durable company fact from this answer"),
+) -> None:
+    """Answer a question; the task resumes."""
+    from karya import db
+    from karya.company import load_company
+    from karya.config import get_settings
+    from karya.worker import inbox as inbox_mod
+
+    settings = get_settings()
+    conn = db.connect(settings.db_path)
+    try:
+        question, fact = inbox_mod.answer_question(conn, load_company(settings.company_dir), question_id, text, by, remember, learn=_learner() if remember else None)
+    except inbox_mod.InboxError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1) from exc
+    console.print(f"[green]{question_id} answered by {question['answered_by']}; task {question['task_id']} requeued.[/green]")
+    if fact is not None:
+        console.print(f"[cyan]Learned {fact.id}: {fact.statement}[/cyan]")
 
 
 @app.command()
-def approve(approval_id: str) -> None:
-    """Approve a held action."""
-    _todo(5)
+def approve(
+    approval_id: str,
+    by: str = typer.Option(..., "--by", help="The approver (must hold the rule's approver role)"),
+    note: str = typer.Option("", "--note", help="Optional note"),
+) -> None:
+    """Approve a held action (RBAC: the approver must hold the rule's role)."""
+    _decide(approval_id, True, by, note)
 
 
 @app.command()
-def reject(approval_id: str) -> None:
-    """Reject a held action."""
-    _todo(5)
+def reject(
+    approval_id: str,
+    by: str = typer.Option(..., "--by", help="The approver (must hold the rule's approver role)"),
+    reason: str = typer.Option(..., "--reason", help="Why (reported, and learned from)"),
+) -> None:
+    """Reject a held action; the task resumes and escalates instead."""
+    _decide(approval_id, False, by, reason)
+
+
+def _decide(approval_id: str, approve_it: bool, by: str, note: str) -> None:
+    from karya import db
+    from karya.company import load_company
+    from karya.config import get_settings
+    from karya.worker import inbox as inbox_mod
+
+    settings = get_settings()
+    conn = db.connect(settings.db_path)
+    try:
+        decided, fact = inbox_mod.decide(conn, load_company(settings.company_dir), approval_id, approve_it, by, note, learn=_learner() if note else None)
+    except inbox_mod.InboxError as exc:
+        console.print(f"[red]Refused: {exc}[/red]")
+        raise typer.Exit(code=1) from exc
+    style = "green" if approve_it else "red"
+    console.print(f"[{style}]{approval_id} {decided['status']} by {decided['decided_by']}; task {decided['task_id']} requeued.[/{style}]")
+    if fact is not None:
+        console.print(f"[cyan]Learned {fact.id}: {fact.statement}[/cyan]")
 
 
 @app.command()
 def audit(task_id: str) -> None:
-    """Audit log for a task."""
-    _todo(5)
+    """Audit log for a task (append-only)."""
+    from karya import db
+    from karya.config import get_settings
 
+    conn = db.connect(get_settings().db_path)
+    table = Table(title=f"Audit log · {task_id}")
+    for column in ("Time (UTC)", "Actor", "Event", "Details"):
+        table.add_column(column)
+    styles = {"policy_denied": "red", "blocked_host": "red", "unknown_write": "red", "approval_required": "yellow", "reconcile": "cyan", "duplicate_prevented": "cyan"}
+    for row in conn.execute("SELECT * FROM audit WHERE task_id = ? ORDER BY id", (task_id,)):
+        style = styles.get(row["event"], "white")
+        table.add_row(row["ts"][11:23], row["actor"], f"[{style}]{row['event']}[/{style}]", row["details_json"][:150])
+    console.print(table)
 
 @memory_app.command("list")
 def memory_list() -> None:

@@ -185,3 +185,34 @@ Decisions not in the plan:
 - "Company knowledge used" in the report lists learned facts that were in the model's context
   (deterministic, from retrieval notes), so citing a fact never depends on the model remembering to.
 - Episodes are written by the report step (one per finished task), already in phase 4.
+
+## Phase 5 — Queue, worker, human-in-the-loop
+
+Done:
+- `karya/worker/worker.py`: `run_worker` (claim → run → sleep when idle; `--once`), heartbeat thread
+  renewing the 60 s lease every 20 s, first Ctrl-C = finish the current step, checkpoint, release (task
+  back to `queued`), second Ctrl-C = exit now; per-task `abort` when the lease is lost.
+- `karya/worker/inbox.py`: answer questions and decide approvals (RBAC via approvals.decide), append the
+  decision to the ledger, requeue the task — shared by the CLI and (later) the eval auto-responder.
+- CLI: `submit [--at ISO] [--max-steps] [--priority]`, `worker [--once] [--id]`, `tasks [--status]`,
+  `inbox`, `answer [--by] [--no-remember]`, `approve --by [--note]`, `reject --by --reason`, `audit`.
+- Tests: queue units (exclusive ordered claims, run_at, lease-expiry reclaim, attempts cap, retries,
+  suspend/requeue, non-owner release ignored), worker SIGINT in a real subprocess, and five real-browser
+  scripted flows: approval with RBAC refusal → single post → approval consumed; rejection → escalated
+  with the reason in the report; simulated `kill -9` after a write → lease expiry → another worker
+  reclaims and resumes (fresh browser, resume note, step numbers continue, a re-submission is blocked
+  as a duplicate, exactly one ERP record); ask_human → waiting_human → answer → resumes with the answer
+  in context; Ctrl-C mid-task → step checkpointed, task back in the queue.
+
+Acceptance: every Phase 5 item is covered by the tests above; CLI `inbox`/`approve` (refused for Arjun Rao,
+accepted for Neha Kulkarni)/`tasks`/`audit` also checked by hand against the live sandbox.
+Not run: the CLI worker with a real LLM (no key here).
+
+Decisions not in the plan:
+- `attempts` counts failed/crashed runs, not suspensions: a clean suspend or finish resets it, so a task
+  that waits for approval several times is never failed for "too many attempts".
+- A rejection requires a reason (it is reported and later learned from).
+- `answer --by` must be a person in company.yaml (default: the task's requester).
+- `karya run` keeps waiting while a task needs a person and resumes in the foreground when it is
+  requeued; `karya resume <T-id>` continues a queued/waiting task (the plan's cut-list fallback, kept as
+  a convenience).

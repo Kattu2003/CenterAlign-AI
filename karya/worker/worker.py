@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import threading
+from typing import Callable
 import traceback
 
 from karya import db
@@ -21,13 +22,14 @@ HEARTBEAT_SECONDS = 20
 def process_task(task_id: str, ctx: RunContext) -> LoopResult:
     """Run one task this worker has claimed. Never leaves the task without a status."""
     stop_beating = threading.Event()
+    ctx.abort.clear()
 
     def beat() -> None:
         conn = db.connect(ctx.settings.db_path)  # sqlite connections are per thread
         try:
             while not stop_beating.wait(HEARTBEAT_SECONDS):
                 if not queue.heartbeat(conn, task_id, ctx.worker_id):
-                    ctx.stop.set()  # we lost the lease: stop after the current step
+                    ctx.abort.set()  # we lost the lease: stop this task after the current step
                     return
         finally:
             conn.close()
@@ -49,3 +51,43 @@ def process_task(task_id: str, ctx: RunContext) -> LoopResult:
         heart.join(timeout=2)
     queue.release(ctx.conn, task_id, ctx.worker_id, result.status, result=result.result)
     return result
+
+
+def run_worker(ctx: RunContext, once: bool = False, poll_seconds: float = 1.0, on_idle: "Callable[[], None] | None" = None) -> int:
+    """Claim -> run -> repeat. One task at a time; several workers are safe (leases).
+
+    First Ctrl-C: finish the current step, checkpoint, release the lease (the task
+    goes back to `queued`). Second Ctrl-C: exit immediately. A `kill -9` is
+    recovered by lease expiry: another worker reclaims the task and resumes it.
+    """
+    import signal
+    import time
+
+    previous = None
+
+    def on_sigint(signum: int, frame: object) -> None:
+        if ctx.stop.is_set():
+            raise KeyboardInterrupt
+        ctx.stop.set()
+
+    if threading.current_thread() is threading.main_thread():
+        previous = signal.signal(signal.SIGINT, on_sigint)
+    processed = 0
+    try:
+        while not ctx.stop.is_set():
+            task = queue.claim(ctx.conn, ctx.worker_id)
+            if task is None:
+                if once:
+                    break
+                if on_idle:
+                    on_idle()
+                time.sleep(poll_seconds)
+                continue
+            process_task(task["id"], ctx)
+            processed += 1
+            if once:
+                break
+    finally:
+        if previous is not None:
+            signal.signal(signal.SIGINT, previous)
+    return processed
