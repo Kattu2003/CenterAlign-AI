@@ -1,0 +1,58 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "karya"
+version = "0.1.0"
+description = "Karya: an autonomous AI employee runtime (plus the Meridian sandbox company it works in)."
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [{ name = "Aayush Katariya" }]
+dependencies = [
+    # sandbox apps
+    "fastapi",
+    "uvicorn",
+    "jinja2",
+    "python-multipart",
+    "itsdangerous",
+    # browser + http
+    "playwright",
+    "httpx",
+    # documents
+    "reportlab",
+    "pypdf",
+    # models / config
+    "pydantic>=2",
+    "pyyaml",
+    "python-dotenv",
+    # retrieval
+    "rank-bm25",
+    # LLM SDKs
+    "openai",
+    "anthropic",
+    # CLI
+    "typer",
+    "rich",
+    # tests (kept in the main set so a clean clone can run `pytest` straight away)
+    "pytest",
+]
+
+[project.optional-dependencies]
+p2 = ["croniter"]
+
+[project.scripts]
+karya = "karya.cli:app"
+
+[tool.setuptools.packages.find]
+include = ["karya*", "sandbox*"]
+
+[tool.setuptools.package-data]
+karya = ["prompts/*.md", "tools/*.js"]
+sandbox = ["*/templates/*.html", "common/static/*", "seed/*.yaml"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "browser: integration tests that drive a real Chromium against the sandbox apps",
+]

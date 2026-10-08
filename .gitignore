@@ -1,0 +1,31 @@
+# secrets
+.env
+
+# runtime state (see README: everything here is regenerated)
+data/
+runs/
+sandbox/data/
+evals/results/*.json
+evals/results/*.md
+!evals/results/latest.md
+!evals/results/.gitkeep
+
+# generated shared-drive content (recreated by `karya sandbox reset`)
+sandbox/shared_drive/*
+!sandbox/shared_drive/README.md
+
+# python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.venv/
+venv/
+build/
+dist/
+
+# editors / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
