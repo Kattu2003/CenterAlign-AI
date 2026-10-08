@@ -353,9 +353,50 @@ def tasks() -> None:
 
 
 @app.command()
-def show(task_id: str, trace: bool = False) -> None:
-    """Show a task report or its full trace."""
-    _todo(4)
+def show(
+    task_id: str,
+    trace: bool = typer.Option(False, "--trace", help="Full timeline: every step, its why, observation and policy events"),
+) -> None:
+    """Show a task's report (or its full trace)."""
+    import json
+
+    from rich.markdown import Markdown
+
+    from karya import db
+    from karya.cli_display import StepPrinter, short_args
+    from karya.config import get_settings
+    from karya.gateway.secrets import Secrets
+    from karya.runtime import ledger
+    from karya.worker import queue
+
+    settings = get_settings()
+    conn = db.connect(settings.db_path)
+    task = queue.get(conn, task_id)
+    if task is None:
+        console.print(f"[red]No task {task_id}.[/red]")
+        raise typer.Exit(code=1)
+    if trace:
+        from karya.company import load_company
+
+        secrets = Secrets(load_company(settings.company_dir).connectors)
+        console.print(f"[bold]{task_id}[/bold] · {task['status']} · {task['request']}")
+        printer = StepPrinter(console, verbose=True)
+        for row in ledger.rows(conn, task_id):
+            payload = json.loads(secrets.redact(json.dumps(row.payload, default=str)))
+            printer.render(task_id, row.kind, payload, at=row.created_at)
+        for event in conn.execute("SELECT * FROM audit WHERE task_id = ? AND actor = 'gateway' ORDER BY id", (task_id,)):
+            if event["event"] in ("policy_denied", "blocked_host", "unknown_write", "read_only_block", "reconcile"):
+                console.print(f"[dim]audit {event['ts'][11:19]}[/dim] gateway {event['event']}")
+        return
+    report = settings.runs_dir / task_id / "report.md"
+    if report.exists():
+        console.print(Markdown(report.read_text(encoding="utf-8")))
+    else:
+        console.print(f"[bold]{task_id}[/bold] · {task['status']} · {task['step_count']} steps · no report yet")
+        console.print(f"Request: {task['request']}")
+        if task["last_error"]:
+            console.print(f"[red]Last error: {task['last_error']}[/red]")
+        _print_waiting(conn, task_id)
 
 
 @app.command()

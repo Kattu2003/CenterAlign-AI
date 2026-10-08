@@ -156,3 +156,32 @@ Decisions not in the plan (see DECISIONS.md for the major ones):
   always shows the current field values; refs stay stable because the DOM did not change.
 - Anthropic: the system prompt (instructions + company context) is marked for prompt caching.
 - `karya/cli_display.py` (not in the plan's layout) holds the rich rendering for the CLI.
+
+## Phase 4 — Verifier and report
+
+Done:
+- `karya/runtime/verifier.py`: deterministic system evidence first (every committed write with a reconcile
+  spec is re-looked-up and compared field by field; matching records counted; extracted document values,
+  approvals and policy events listed), then a separate read-only model conversation (own browser context,
+  gateway `read_only`, max 15 steps, never sees the worker transcript). Overall verdict computed in code:
+  pass only if every criterion passes and the system evidence shows no mismatch.
+- `karya/runtime/report.py`: report.md/report.json with outcome, request, what I did (with `why`), results,
+  verification table + system evidence, needs your attention, flags, evidence (screenshots, record refs,
+  files), company knowledge used, stats; the episode is saved for memory.
+- `karya show <T-id>` (rendered report) and `karya show <T-id> --trace` (timestamps, args redacted, why,
+  observation, notes, artifacts, policy events).
+- `ScriptedVerifier` for tests.
+
+Acceptance (scripted, real browser): happy path report shows c1–c3 pass with the ERP ref from the API
+lookup and screenshot ids; corrupting the ERP amount in a `before_verify` hook makes c2 fail
+("amount submitted 42380.00 but Meridian ERP has 43280.00"), the loop receives verifier feedback, and the
+task ends `partial` after the second failed round; `--trace` prints the timeline.
+
+Decisions not in the plan:
+- The overall verdict is computed in code, never taken from the model; system-evidence mismatches
+  (missing record, duplicates, field mismatch) force `fail`.
+- Missing verdicts become `unverifiable` (and therefore not a pass).
+- If the verifier model errors, the result is an honest `fail` with the error in the notes.
+- "Company knowledge used" in the report lists learned facts that were in the model's context
+  (deterministic, from retrieval notes), so citing a fact never depends on the model remembering to.
+- Episodes are written by the report step (one per finished task), already in phase 4.

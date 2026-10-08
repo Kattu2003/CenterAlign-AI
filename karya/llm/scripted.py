@@ -84,3 +84,34 @@ def find_ref(text: str, kind: str, label: str | None = None, name: str | None = 
 
 def last_user_text(messages: list[Message]) -> str:
     return next((m.content for m in reversed(messages) if m.role == "user"), "")
+
+
+class ScriptedVerifier:
+    """A scripted auditor for tests: submits verdicts straight away. Every criterion
+    passes unless the code-made system evidence shows a mismatch; then the criteria
+    listed in `fail_on_mismatch` fail. Optionally runs `checks` (tool calls) first."""
+
+    model = "scripted-verifier"
+    fast_model = "scripted-verifier"
+    MISMATCH_MARKERS = ("MISMATCH", "NO matching record", "DUPLICATES")
+
+    def __init__(self, fail_on_mismatch: Iterable[str] = (), checks: Iterable[dict[str, Any]] = ()) -> None:
+        self.fail_on_mismatch = set(fail_on_mismatch)
+        self.checks: deque[dict[str, Any]] = deque(checks)
+        self.requests: list[list[Message]] = []
+
+    def chat(self, messages: list[Message], tools: list[ToolSpec], tool_choice: ToolChoice = "required", model: str | None = None) -> LLMResponse:
+        self.requests.append(messages)
+        if self.checks and tool_choice == "required":
+            check = self.checks.popleft()
+            return LLMResponse(text="", tool_calls=[ToolCall(new_call_id(), check["name"], dict(check["arguments"]))], usage=Usage(), model=self.model)
+        brief = last_user_text(messages)
+        criteria = re.findall(r"^\s{2}(c\d+):", brief.split("WORKER'S FINISH")[0], flags=re.M)
+        evidence = brief.split("SYSTEM EVIDENCE", 1)[-1].split("YOUR CHECKS SO FAR", 1)[0]
+        mismatch = any(marker in evidence for marker in self.MISMATCH_MARKERS)
+        verdicts = []
+        for cid in criteria:
+            failed = mismatch and cid in self.fail_on_mismatch
+            verdicts.append({"criterion_id": cid, "verdict": "fail" if failed else "pass", "evidence": ["system evidence"], "note": "system evidence shows a mismatch" if failed else "confirmed by system evidence"})
+        arguments = {"why": "All criteria checked.", "verdicts": verdicts, "overall": "fail" if any(v["verdict"] == "fail" for v in verdicts) else "pass", "notes": ""}
+        return LLMResponse(text="", tool_calls=[ToolCall(new_call_id(), "submit_verdicts", arguments)], usage=Usage(), model=self.model)

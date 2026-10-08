@@ -47,17 +47,20 @@ def short_args(arguments: dict[str, Any]) -> str:
 class StepPrinter:
     """Ledger listener: prints each step as it happens."""
 
-    def __init__(self, console: Console, show_task: bool = False) -> None:
+    def __init__(self, console: Console, show_task: bool = False, verbose: bool = False) -> None:
         self.console = console
         self.show_task = show_task
+        self.verbose = verbose  # --trace: full arguments and timestamps
         self._calls: dict[tuple[str, int], dict[str, Any]] = {}
 
     def __call__(self, task_id: str, seq: int, kind: str, payload: dict[str, Any]) -> None:
         self.render(task_id, kind, payload)
 
-    def render(self, task_id: str, kind: str, p: dict[str, Any]) -> None:
+    def render(self, task_id: str, kind: str, p: dict[str, Any], at: str = "") -> None:
         c = self.console
         prefix = f"[dim]{task_id}[/dim] " if self.show_task else ""
+        if self.verbose and at:
+            prefix += f"[dim]{at[11:19]}[/dim] "
         if kind == "intake":
             goal = p["goal_spec"]
             c.print(f"{prefix}[bold]Goal:[/bold] {escape(goal['objective'])}")
@@ -77,7 +80,15 @@ class StepPrinter:
             arguments = call.get("arguments", {})
             mark = "[green]✓[/green]" if obs["ok"] else "[red]✗[/red]"
             c.print(f"{prefix}{mark} [bold]#{p['step']:02d} {p['tool']}[/bold] {escape(short_args(arguments))}  [dim]why: {escape(str(arguments.get('why', '')))}[/dim]")
+            if self.verbose:
+                shown = {k: v for k, v in arguments.items() if k != "why"}
+                c.print(f"{prefix}     [dim]args: {escape(json.dumps(shown, ensure_ascii=False, default=str))}[/dim]")
             c.print(f"{prefix}     → {escape(obs['summary'])}")
+            if self.verbose:
+                for note in obs.get("meta", {}).get("notes", []):
+                    c.print(f"{prefix}     [dim]note: {escape(note)}[/dim]")
+                if obs.get("artifacts"):
+                    c.print(f"{prefix}     [dim]artifacts: {', '.join(obs['artifacts'])}[/dim]")
             for event in obs.get("policy_events", []):
                 c.print(f"{prefix}     [{event_style(event)}]● {event['type']}: {escape(event['message'])}[/{event_style(event)}]")
             for flag in obs.get("flags", []):

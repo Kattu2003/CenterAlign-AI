@@ -25,8 +25,11 @@ REQUEST = "Find the latest invoice from Acme Industries in the AP mailbox, enter
 
 
 def make_ctx(llm, **kwargs) -> RunContext:
+    from karya.llm.scripted import ScriptedVerifier
+
     reset_settings()
     settings = get_settings()
+    kwargs.setdefault("verifier_llm", ScriptedVerifier(fail_on_mismatch=["c2"]))
     return RunContext(settings=settings, company=load_company(settings.company_dir), llm=llm, conn=db.connect(settings.db_path), **kwargs)
 
 
@@ -82,6 +85,21 @@ def test_happy_path_end_to_end(live_sandbox, fresh_sandbox):
     payload = json.loads(invoice_intents[0]["payload_json"])
     assert "csrf_token" not in payload  # volatile fields are dropped
 
+    # Phase 4: independent verification + evidence report.
+    verification = state.verifications[-1]
+    assert verification["result"]["overall"] == "pass"
+    evidence = " ".join(verification["system_evidence"])
+    assert "1 matching record(s) in Meridian ERP (ref ERP-INV-000104)" in evidence
+    assert "amount matches" in evidence and "due_date matches" in evidence
+    report = (run_dir / "report.md").read_text()
+    assert "Succeeded" in report and "| c1 " in report and "| c2 " in report and "| c3 " in report
+    assert report.count("| pass |") == 3
+    assert "erp:ERP-INV-000104" in report and "downloads/AI-2026-0917.pdf" in report
+    data = json.loads((run_dir / "report.json").read_text())
+    assert data["stats"]["writes_committed"] == 2 and data["stats"]["verifier_rounds"] == 1
+    assert any(a["tool"] == "files_extract" for a in data["what_i_did"])
+    assert ctx.conn.execute("SELECT outcome FROM episodes WHERE task_id = ?", (task_id,)).fetchone()["outcome"] == "succeeded"
+
 
 def test_vertex_invoice_is_held_for_approval(live_sandbox, fresh_sandbox):
     from karya.gateway import approvals
@@ -101,3 +119,28 @@ def test_vertex_invoice_is_held_for_approval(live_sandbox, fresh_sandbox):
     last = state.history[-1].observation
     assert last.policy_events[0].type == "approval_required"
     assert "Held for approval" in last.content  # the browser shows the gateway's 202 page
+
+
+def test_verifier_catches_a_corrupted_record(live_sandbox, fresh_sandbox):
+    """Phase 4 acceptance: change the ERP amount between finish and verify -> c2 fails, the
+    loop gets feedback, and the task cannot end as succeeded."""
+    from sandbox.common.db import opened
+
+    def corrupt(task_id: str) -> None:
+        with opened("erp") as conn:
+            conn.execute("UPDATE invoices SET amount_paise = 4328000 WHERE invoice_number = 'AI/2026/0917'")
+
+    llm = flows.happy_llm(live_sandbox, fresh_sandbox)
+    llm.steps.append(flows.step("finish", "Retry after feedback.", status="completed", summary="Posted AI/2026/0917.", claims=[]))
+    ctx = make_ctx(llm, hooks={"before_verify": corrupt})
+    task_id, result = run_until_rest(ctx)
+    state = ledger.load_state(ctx.conn, task_id)
+    first = state.verifications[0]["result"]
+    assert first["overall"] == "fail"
+    verdicts = {v["criterion_id"]: v["verdict"] for v in first["verdicts"]}
+    assert verdicts["c2"] == "fail" and verdicts["c1"] == "pass"
+    assert "amount submitted 42380.00" in first["notes"] and "43280.00" in first["notes"]
+    feedback = state.notes_of("verifier_feedback")
+    assert feedback and "c2 fail" in feedback[0]["text"]
+    assert result.status == "partial"  # two failed verification rounds, some criteria pass
+    assert len(state.verifications) == 2
