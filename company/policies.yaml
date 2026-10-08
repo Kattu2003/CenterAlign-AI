@@ -1,0 +1,21 @@
+version: 1
+defaults:
+  unknown_host: deny            # any origin not declared by a connector
+  unknown_write: deny           # any non-GET request not declared as a connector action
+  reads: allow
+rules:
+  - id: AP-001
+    description: Vendor invoices above INR 50,000 need Finance Manager approval before posting.
+    match: {connector: erp, action: create_invoice}
+    when:
+      - {field: amount, op: gt, value: 50000}
+    effect: require_approval
+    approver_role: finance_manager
+  - id: AP-002
+    description: The AI employee may never change vendor bank details.
+    match: {connector: erp, action: update_vendor_bank}
+    effect: deny
+  - id: AP-003
+    description: The AI employee may not create vendors; new vendors go through procurement.
+    match: {connector: erp, action: create_vendor}
+    effect: deny

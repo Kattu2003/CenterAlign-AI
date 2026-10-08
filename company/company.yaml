@@ -1,0 +1,12 @@
+name: Meridian Components Pvt Ltd
+short_name: Meridian
+timezone: Asia/Kolkata
+currency: INR
+email_domain: meridian.example
+people:
+  - {name: Arjun Rao, title: AP Lead, roles: [requester]}
+  - {name: Neha Kulkarni, title: Finance Manager, roles: [finance_manager]}
+  - {name: Vikram Desai, title: IT Admin, roles: [it_admin]}
+  - {name: Sneha Iyer, title: HR Lead, roles: [hr]}
+  - {name: Rohan Mehta, title: Data Team Lead, roles: [manager]}
+default_requester: Arjun Rao

@@ -1,0 +1,66 @@
+id: erp
+name: Meridian ERP
+kind: web_app
+base_url: http://127.0.0.1:8101
+purpose: >
+  Finance system of record. Look up vendors (vendor master) and posted invoices;
+  post (enter) vendor invoices.
+auth:
+  type: form_login
+  login_path: /login
+  form_fields: {username: username, password: password}
+  credentials: {username_env: ERP_AGENT_USER, password_env: ERP_AGENT_PASSWORD}
+  logged_out_signal: {path_prefix: /login}
+volatile_fields: [csrf_token]
+blocked_paths: ["/__*"]
+actions:
+  - name: login
+    method: POST
+    path: /login
+    risk: auth
+  - name: logout
+    method: POST
+    path: /logout
+    risk: auth
+  - name: create_invoice
+    method: POST
+    path: /invoices
+    risk: write
+    description: Post a vendor invoice.
+    fields:
+      vendor_id: {type: str}
+      invoice_number: {type: str}
+      invoice_date: {type: date}
+      due_date: {type: date}
+      amount: {type: decimal}
+    idempotency_key: [vendor_id, invoice_number]
+    reconcile:
+      api: find_invoice
+      params: {vendor_id: "{vendor_id}", invoice_number: "{invoice_number}"}
+      exists_if: non_empty_list
+      record_ref_field: erp_ref
+    display: "Invoice {invoice_number} for vendor {vendor_id}: INR {amount}, due {due_date}"
+  - name: update_vendor_bank
+    method: POST
+    path: /vendors/{vendor_id}/bank
+    risk: irreversible
+    description: Change a vendor's bank account.
+    fields:
+      vendor_id: {type: str}
+      account_number: {type: str}
+      ifsc: {type: str}
+  - name: create_vendor
+    method: POST
+    path: /vendors
+    risk: write
+    description: Create a vendor in the vendor master.
+    fields:
+      legal_name: {type: str}
+      gstin: {type: str}
+api:
+  auth: {header: X-API-Key, key_env: ERP_API_KEY}
+  endpoints:
+    - {name: search_vendors, path: /api/vendors, params: [q], description: "Search vendor master by name or GSTIN."}
+    - {name: get_vendor, path: "/api/vendors/{vendor_id}", description: "One vendor."}
+    - {name: find_invoice, path: /api/invoices, params: [vendor_id, invoice_number, q], description: "Search posted invoices."}
+    - {name: get_invoice, path: "/api/invoices/{id}", description: "One posted invoice."}

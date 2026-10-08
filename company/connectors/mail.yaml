@@ -1,0 +1,39 @@
+id: mail
+name: Meridian Mail (AP mailbox)
+kind: web_app
+base_url: http://127.0.0.1:8102
+purpose: >
+  The accounts-payable shared mailbox (ap@meridian.example). Vendors email invoices here as PDF
+  attachments. Read messages, download attachments, and label each message Processed,
+  Needs review or Duplicate.
+auth:
+  type: form_login
+  login_path: /login
+  form_fields: {username: username, password: password}
+  credentials: {username_env: MAIL_AGENT_USER, password_env: MAIL_AGENT_PASSWORD}
+  logged_out_signal: {path_prefix: /login}
+volatile_fields: [csrf_token]
+blocked_paths: ["/__*"]
+actions:
+  - name: login
+    method: POST
+    path: /login
+    risk: auth
+  - name: logout
+    method: POST
+    path: /logout
+    risk: auth
+  - name: label_message
+    method: POST
+    path: /messages/{message_id}/labels
+    risk: write_low
+    description: Add a label (Processed, Needs review or Duplicate) to a message.
+    fields:
+      message_id: {type: int}
+      label: {type: str}
+    display: "Label message {message_id} as {label}"
+api:
+  auth: {header: X-API-Key, key_env: MAIL_API_KEY}
+  endpoints:
+    - {name: search_messages, path: /api/messages, params: [q, label, unlabelled], description: "Search the AP mailbox by sender, subject or body; label=<name> filters by label; unlabelled=1 lists messages with no label yet."}
+    - {name: get_message, path: "/api/messages/{message_id}", description: "One message with body, labels and attachment names and download URLs."}

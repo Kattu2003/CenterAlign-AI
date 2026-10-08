@@ -1,0 +1,7 @@
+id: shared_drive
+name: Shared drive
+kind: filesystem
+root: sandbox/shared_drive
+purpose: Company shared folders (finance reference files; HR offer letters).
+read: ["**"]
+write: ["outbox/**"]

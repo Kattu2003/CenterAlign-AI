@@ -1,0 +1,19 @@
+{
+  "name": "invoice",
+  "description": "A vendor tax invoice (India, GST).",
+  "fields": {
+    "vendor_legal_name": {"type": "string", "description": "Legal name of the issuing vendor"},
+    "vendor_gstin": {"type": "string", "required": false},
+    "invoice_number": {"type": "string"},
+    "invoice_date": {"type": "date"},
+    "due_date": {"type": "date"},
+    "po_number": {"type": "string", "required": false},
+    "subtotal": {"type": "decimal", "description": "Total before tax"},
+    "tax_total": {"type": "decimal", "description": "Total GST (CGST+SGST or IGST)"},
+    "total": {"type": "decimal", "description": "Total payable including tax"}
+  },
+  "checks": [
+    {"type": "sum", "parts": ["subtotal", "tax_total"], "equals": "total", "tolerance": 1.0},
+    {"type": "date_order", "earlier": "invoice_date", "later": "due_date"}
+  ]
+}

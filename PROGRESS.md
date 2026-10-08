@@ -77,3 +77,29 @@ Decisions not in the plan:
 - `reset` regenerates `sandbox/shared_drive/finance/` and empties `outbox/` (generated sandbox state,
   as the plan's `reset` description says); nothing outside the sandbox is touched.
 - IST is a fixed +05:30 offset in the sandbox (India has no DST), avoiding a `tzdata` dependency on Windows.
+
+## Phase 2 — Company configuration
+
+Done:
+- `company/`: `company.yaml`, six handbook SOPs chunked on `##` (each AP-01 step is its own chunk, so
+  `ap-01#5` is the duplicate check), `policies.yaml` (AP-001/002/003), connectors `erp`, `mail`,
+  `shared_drive`, schema `invoice.json`. The handbook deliberately never says what "Acme" means.
+- `karya/connectors/models.py` (strict pydantic specs, path-template matching, origin normalisation),
+  `loader.py`; `karya/gateway/policy.py` (structured conditions, AND, deny > approval > allow, every
+  matching rule recorded); `karya/company.py` (one `Company` object + cross-reference `problems()`).
+- `karya config check`: summary tables (people, handbook, connectors, declared actions with risk,
+  API endpoints, rules, schemas, which credential env vars are set) and a non-zero exit on problems.
+- Tests: `tests/test_policy.py` (every op, AND, precedence, matching, fail-closed),
+  `tests/test_connectors.py` (templates, unknown writes, blocked globs, origins, handbook chunks).
+
+Decisions not in the plan:
+- `karya/company.py` (not in the plan's layout) aggregates company.yaml, handbook, policies,
+  connectors and schemas so the rest of the runtime takes one object.
+- Fail closed in the policy engine: a condition whose field is missing or cannot be coerced counts as
+  matching (so a malformed amount still triggers AP-001). String comparisons are case-insensitive.
+- `config check` also validates cross-references (rule → connector/action/field, approver role held
+  by someone, reconcile api declared, template fields known) — the likely live-edit mistakes.
+- The overview doc's id is `company-overview` (no `xx-NN` prefix in its file name).
+- Connector specs are strict (`extra="forbid"`), so a typo in YAML fails loudly instead of being ignored.
+- Extra declared fields on `update_vendor_bank` / `create_vendor` so denied attempts are audited with
+  their payload.
