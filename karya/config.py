@@ -72,6 +72,7 @@ class Settings:
     sandbox_admin_token: str
     openai_base_url: str      # any OpenAI-compatible API, e.g. Gemini's
     llm_max_rpm: int          # pace model calls under a free tier's cap; 0 = no pacing
+    browser_window: str       # 'x,y,width,height' for the visible browser (demo recordings)
 
     @property
     def fast_model(self) -> str:
@@ -106,6 +107,7 @@ def load_settings() -> Settings:
         sandbox_admin_token=_str("SANDBOX_ADMIN_TOKEN", "change-me-admin"),
         openai_base_url=_str("OPENAI_BASE_URL"),
         llm_max_rpm=_int("KARYA_LLM_MAX_RPM", 0),
+        browser_window=_str("KARYA_BROWSER_WINDOW"),
     )
 
 

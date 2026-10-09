@@ -37,6 +37,15 @@ def _safe_filename(name: str) -> str:
     return cleaned or "download.bin"
 
 
+def parse_window(value: str) -> tuple[int, int, int, int] | None:
+    """KARYA_BROWSER_WINDOW '640,0,1280,1040' -> (x, y, width, height); empty or malformed -> None."""
+    try:
+        x, y, width, height = (int(part) for part in value.split(","))
+    except ValueError:
+        return None
+    return (x, y, width, height) if width > 0 and height > 0 else None
+
+
 class BrowserSession:
     def __init__(self, tools: "ToolSession") -> None:
         self.tools = tools
@@ -61,8 +70,15 @@ class BrowserSession:
         launch: dict[str, Any] = {"headless": settings.headless}
         if settings.chromium_path:
             launch["executable_path"] = settings.chromium_path
+        context: dict[str, Any] = {"accept_downloads": True, "viewport": {"width": 1280, "height": 900}}
+        window = None if settings.headless else parse_window(settings.browser_window)
+        if window:
+            # Demo recordings: every run's window opens at the same place and size, and the page fills it.
+            x, y, width, height = window
+            launch["args"] = [f"--window-position={x},{y}", f"--window-size={width},{height}"]
+            context = {"accept_downloads": True, "no_viewport": True}
         self._browser = self._pw.chromium.launch(**launch)
-        self._context = self._browser.new_context(accept_downloads=True, viewport={"width": 1280, "height": 900})
+        self._context = self._browser.new_context(**context)
         self._context.set_default_timeout(PAGE_TIMEOUT_MS)
         # Before any navigation: every request of this context goes through the gateway (D3).
         self._context.route("**/*", self.tools.gateway.on_route)

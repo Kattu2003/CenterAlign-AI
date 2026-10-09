@@ -384,6 +384,12 @@ Not done here (needs the author): recording the video, and the real-model eval r
 - Documented `KARYA_CHROMIUM_PATH` (use an installed Edge/Chrome when the Chromium download is slow) and the PowerShell
   activation steps. Tests: `tests/test_llm_clients.py` (Retry-After, backoff cap, pacing, base URL).
   Full suite: 155 passed, 1 skipped.
+- Windows: the sandbox apps start with `CREATE_NO_WINDOW` (a venv's python.exe is a launcher whose child interpreter
+  otherwise opened its own console window, and closing it stopped the app); `sandbox down` stops the process tree
+  (`taskkill /T`). `KARYA_BROWSER_WINDOW` pins the visible browser's position and size for demo recordings.
+- First real-model run (Gemini 3.5 Flash through the OpenAI-compatible endpoint, author's Windows laptop): the happy
+  path succeeded in 40 steps, ERP-INV-000104 posted, email labelled, verifier passed all six criteria.
+- DEMO.md rewritten as a frame-by-frame script with PowerShell commands.
 
 ## Open questions / author to-do before submission
 

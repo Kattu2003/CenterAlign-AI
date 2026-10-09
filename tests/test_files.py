@@ -79,3 +79,12 @@ def test_unknown_tool_and_bad_arguments(session):
     assert not call(session, "rm_rf", path="/").ok
     missing_why = session.execute(ToolCall("c", "files_list", {"path": ""}), step=1)
     assert not missing_why.ok and "why" in missing_why.error
+
+
+def test_browser_window_setting_is_parsed_strictly():
+    from karya.tools.browser import parse_window
+
+    assert parse_window("640,0,1280,1040") == (640, 0, 1280, 1040)
+    assert parse_window(" 512, 0, 1024, 860 ") == (512, 0, 1024, 860)
+    for bad in ("", "640,0,1280", "a,b,c,d", "0,0,0,900"):
+        assert parse_window(bad) is None

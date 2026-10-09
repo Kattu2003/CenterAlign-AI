@@ -351,7 +351,7 @@ chunks.
   deterministic evidence, reports — is tested without a model. Scripted scenarios are YAML (`evals/suite.yaml` `redteam-bank`,
   `tests/eval_suite_scripted.yaml`).
 - **Alternatives.** Mock the browser; record/replay model responses; test only with a live model.
-- **Why.** Deterministic, free, fast tests for everything that must not depend on model behaviour (155 passing tests). A new
+- **Why.** Deterministic, free, fast tests for everything that must not depend on model behaviour (157 passing tests). A new
   red-team probe is a YAML list of actions, no code.
 - **Trade-off.** Scripts test the runtime, not the model's judgement; that is what the eval suite with a real model measures.
 - **What would change my mind.** Nothing; both layers are needed.

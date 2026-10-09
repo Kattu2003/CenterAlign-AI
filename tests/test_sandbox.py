@@ -286,3 +286,16 @@ def test_offer_letter_in_shared_drive(base_date):
     start = base_date + timedelta(days=12)
     assert "Priya Sharma" in text and "Data Analyst" in text and "Rohan Mehta" in text
     assert f"{start.day} {start.strftime('%B')} {start.year}" in text
+
+
+def test_stop_kills_the_whole_process_tree_on_windows(monkeypatch):
+    """A venv's python.exe on Windows is a launcher with a child interpreter: stop both."""
+    from types import SimpleNamespace
+
+    from sandbox import run
+
+    calls = []
+    monkeypatch.setattr(run, "os", SimpleNamespace(name="nt"))
+    monkeypatch.setattr(run.subprocess, "run", lambda args, **kw: calls.append(args) or SimpleNamespace(returncode=0))
+    assert run._stop(4242) is True
+    assert calls == [["taskkill", "/PID", "4242", "/T", "/F"]]

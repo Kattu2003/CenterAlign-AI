@@ -79,7 +79,9 @@ def up(names: list[str] | None = None, wait_s: float = 30.0) -> list[tuple[str, 
             continue
         kwargs: dict = {}
         if os.name == "nt":
-            kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS
+            # CREATE_NO_WINDOW, not DETACHED_PROCESS: a venv's python.exe is a launcher that starts the real
+            # interpreter as a child, and that child would get a console window of its own (closing it kills the app).
+            kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW
         else:
             kwargs["start_new_session"] = True  # survive the CLI exiting; ignore its Ctrl-C
         log = open(log_dir / f"{spec.name}.log", "ab")
@@ -105,15 +107,22 @@ def up(names: list[str] | None = None, wait_s: float = 30.0) -> list[tuple[str, 
     return results
 
 
+def _stop(pid: int) -> bool:
+    """Stop one app. On Windows, the whole process tree: the venv launcher and the interpreter it started."""
+    if os.name == "nt":
+        return subprocess.run(["taskkill", "/PID", str(pid), "/T", "/F"], capture_output=True).returncode == 0
+    try:
+        os.kill(pid, signal.SIGTERM)
+        return True
+    except (ProcessLookupError, OSError):
+        return False
+
+
 def down() -> list[tuple[str, str]]:
     results: list[tuple[str, str]] = []
     pids = _read_pids()
     for name, pid in pids.items():
-        try:
-            os.kill(pid, signal.SIGTERM)
-            results.append((name, f"stopped (pid {pid})"))
-        except (ProcessLookupError, OSError):
-            results.append((name, f"not running (pid {pid})"))
+        results.append((name, f"stopped (pid {pid})" if _stop(pid) else f"not running (pid {pid})"))
     deadline = time.monotonic() + 8
     for name in pids:
         spec = get_app(name)
