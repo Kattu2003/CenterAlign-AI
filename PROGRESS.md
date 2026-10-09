@@ -390,6 +390,8 @@ Not done here (needs the author): recording the video, and the real-model eval r
 - First real-model run (Gemini 3.5 Flash through the OpenAI-compatible endpoint, author's Windows laptop): the happy
   path succeeded in 40 steps, ERP-INV-000104 posted, email labelled, verifier passed all six criteria.
 - DEMO.md rewritten as a frame-by-frame script with PowerShell commands.
+- `karya cancel <T-id>` (queued or waiting tasks); `karya sandbox arm/chaos` reject unknown fault/profile names with the
+  list of valid ones instead of a traceback.
 
 ## Open questions / author to-do before submission
 

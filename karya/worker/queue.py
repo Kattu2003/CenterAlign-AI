@@ -125,6 +125,19 @@ def requeue(conn: sqlite3.Connection, task_id: str) -> bool:
     return cursor.rowcount == 1
 
 
+def cancel(conn: sqlite3.Connection, task_id: str, by: str) -> bool:
+    """A queued or waiting task will not run again (a running task must be stopped by its worker first)."""
+    with transaction(conn):
+        cursor = conn.execute(
+            "UPDATE tasks SET status = 'cancelled', lease_owner = NULL, lease_expires_at = NULL, updated_at = ? "
+            "WHERE id = ? AND status IN ('queued', 'waiting_human', 'waiting_approval')",
+            (now_iso(), task_id),
+        )
+        if cursor.rowcount == 1:
+            audit(conn, "human", "task_cancelled", {"by": by}, task_id)
+    return cursor.rowcount == 1
+
+
 def add_tokens(conn: sqlite3.Connection, task_id: str, usage: Usage) -> None:
     conn.execute(
         "UPDATE tasks SET tokens_in = tokens_in + ?, tokens_out = tokens_out + ?, updated_at = ? WHERE id = ?",

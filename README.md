@@ -86,6 +86,7 @@ karya reject APR-0001 --by "Neha Kulkarni" --reason "PO not received"
 karya answer Q-0001 "Acme Industries Pvt Ltd (V001)"                # the task resumes; the fact is learned
 karya memory list                                                   # learned facts with provenance
 karya memory forget F-0001 --by "Arjun Rao"
+karya cancel T-0003                                                 # a queued or waiting task will not run
 ```
 
 **Watch the browser:** set `KARYA_HEADLESS=0` in `.env` (or for one command: `KARYA_HEADLESS=0 karya run "..."` on
@@ -100,7 +101,7 @@ macOS/Linux, `$env:KARYA_HEADLESS="0"` first in PowerShell).
 karya evals list
 karya evals run --chaos off --runs 1                       # all 12 scenarios once (model cost applies; tokens are reported)
 karya evals run --scenarios ap-happy,ap-approval-approve,ap-duplicate,ap-injection,hr-onboard --chaos heavy --runs 2
-pytest                                                     # 158 tests, no API key needed (1 skips without a key)
+pytest                                                     # 160 tests, no API key needed (1 skips without a key)
 ```
 
 Results go to `evals/results/<timestamp>.md/.json` and `evals/results/latest.md`.
@@ -251,7 +252,7 @@ From `evals/results/latest.md` (regenerate with the commands in the quick start)
 > running `karya evals run` with a key; LLM behaviour is nondeterministic, so expect below 100% and read the per-scenario
 > notes for the first failing check.
 
-What is verified deterministically, without a model (`pytest`: 158 tests, 28 of them drive real Chromium through the gateway
+What is verified deterministically, without a model (`pytest`: 160 tests, 28 of them drive real Chromium through the gateway
 against the live sandbox apps using a scripted agent):
 
 | Area | Covered by |
@@ -341,7 +342,7 @@ company/                Meridian's configuration: company.yaml, handbook/*.md, p
 sandbox/                the sandbox company: erp/, mail/, hr/ (FastAPI apps), common/ (auth, chaos, money, dates),
                         seed/ (data.yaml, seed.py, generate_pdfs.py), run.py, shared_drive/
 evals/                  suite.yaml (12 scenarios), results/latest.md
-tests/                  158 tests (unit + real-browser scripted runs)
+tests/                  160 tests (unit + real-browser scripted runs)
 docs/images/            screenshots used in this README
 data/  runs/            created at runtime: karya.db; per-task trace.jsonl, screens/, downloads/, report.md/json
 ARCHITECTURE.md  DECISIONS.md  DEMO.md  PROGRESS.md

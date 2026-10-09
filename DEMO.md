@@ -277,5 +277,5 @@ Say: "The AI decides, the gateway enforces, the verifier checks. Thanks for watc
 3. Scene 8 needs eval numbers: `karya evals run --scenarios ap-happy,ap-approval-approve,ap-duplicate,ap-injection,ap-bank-change,hr-onboard`
    (it resets the sandbox, so run it outside a take), then paste the summary of `evals\results\latest.md` into the README.
 
-**If something goes wrong:** `Ctrl+C` stops a run (the task goes back to the queue); `karya show <id> --trace` shows every
-step; Part B resets everything. Extra Edge tabs: close them. Ids different from the script: use the ones on screen.
+**If something goes wrong:** `Ctrl+C` stops a run (the task goes back to the queue, so `karya cancel <id>` it before
+Scene 4, or the worker will pick it up first); `karya show <id> --trace` shows every step; Part B resets everything. Extra Edge tabs: close them. Ids different from the script: use the ones on screen.

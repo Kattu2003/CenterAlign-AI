@@ -91,3 +91,27 @@ def test_release_by_non_owner_is_ignored(conn):
     queue.claim(conn, "w1")
     queue.release(conn, task_id, "w2", "succeeded")
     assert queue.get(conn, task_id)["status"] == "running"
+
+
+def test_cancel_only_queued_or_waiting_tasks(conn):
+    queued = queue.enqueue(conn, "a", "Arjun Rao")
+    assert queue.cancel(conn, queued, "Arjun Rao")
+    assert queue.get(conn, queued)["status"] == "cancelled"
+    assert queue.claim(conn, "w1") is None  # a cancelled task is never claimed
+    running = queue.enqueue(conn, "b", "Arjun Rao")
+    queue.claim(conn, "w1")
+    assert not queue.cancel(conn, running, "Arjun Rao")  # its worker must stop it first
+    events = [r["event"] for r in conn.execute("SELECT event FROM audit WHERE task_id = ?", (queued,))]
+    assert "task_cancelled" in events
+
+
+def test_cli_rejects_unknown_fault_and_profile_names():
+    from typer.testing import CliRunner
+
+    from karya.cli import app
+
+    runner = CliRunner()
+    typo = runner.invoke(app, ["sandbox", "arm", "comit_then_504"])
+    assert typo.exit_code == 2 and "Unknown fault" in typo.output and "commit_then_504" in typo.output
+    bad = runner.invoke(app, ["sandbox", "chaos", "extreme"])
+    assert bad.exit_code == 2 and "Unknown chaos profile" in bad.output

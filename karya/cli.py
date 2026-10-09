@@ -81,7 +81,11 @@ def sandbox_chaos(
 ) -> None:
     """Set the chaos profile on every running sandbox app."""
     from sandbox import run as sandbox_run
+    from sandbox.common.chaos import PROFILES
 
+    if profile not in PROFILES:
+        console.print(f"[red]Unknown chaos profile {profile!r}.[/red] Choose one of: {', '.join(PROFILES)}")
+        raise typer.Exit(code=2)
     result = sandbox_run.set_chaos(profile, seed)
     if not result:
         console.print("[yellow]No sandbox apps are running.[/yellow]")
@@ -97,9 +101,19 @@ def sandbox_arm(
     path: Optional[str] = typer.Option(None, help="Only requests to this path (glob), e.g. /invoices/new"),
 ) -> None:
     """Arm a deterministic fault: the next N matching requests get it."""
-    from sandbox import run as sandbox_run
+    import httpx
 
-    state = sandbox_run.arm(app_name, fault, count, path)
+    from sandbox import run as sandbox_run
+    from sandbox.common.chaos import FAULTS
+
+    if fault not in FAULTS:
+        console.print(f"[red]Unknown fault {fault!r}.[/red] Choose one of: {', '.join(FAULTS)}")
+        raise typer.Exit(code=2)
+    try:
+        state = sandbox_run.arm(app_name, fault, count, path)
+    except httpx.HTTPError as exc:
+        console.print(f"[red]Could not arm {fault} on {app_name}: {exc}[/red] (is the sandbox up? `karya sandbox status`)")
+        raise typer.Exit(code=1) from exc
     console.print(f"[bold]{app_name}[/bold]: armed {state['armed']}")
 
 
@@ -388,6 +402,24 @@ def worker(
         console.print(f"[yellow]Worker {ctx.worker_id} stopped; {processed} task run(s). Unfinished work was returned to the queue.[/yellow]")
     else:
         console.print(f"Worker {ctx.worker_id} exiting; {processed} task run(s).")
+
+@app.command()
+def cancel(task_id: str, by: str = typer.Option("cli", "--by", help="Who is cancelling (audited)")) -> None:
+    """Cancel a queued or waiting task so no worker runs it."""
+    from karya import db
+    from karya.config import get_settings
+    from karya.worker import queue
+
+    conn = db.connect(get_settings().db_path)
+    task = queue.get(conn, task_id)
+    if task is None:
+        console.print(f"[red]No task {task_id}.[/red]")
+        raise typer.Exit(code=1)
+    if not queue.cancel(conn, task_id, by):
+        console.print(f"[yellow]{task_id} is {task['status']}; only queued or waiting tasks can be cancelled.[/yellow]")
+        raise typer.Exit(code=1)
+    console.print(f"{task_id} cancelled.")
+
 
 @app.command()
 def tasks(status: Optional[str] = typer.Option(None, help="Only tasks with this status")) -> None:
